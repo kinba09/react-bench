@@ -23,6 +23,11 @@ test('documented CLI writes offline results and refuses to overwrite them', { ti
     assert.match(result.stdout, /1 \/ 1 correct/);
     const saved = await readFile(join(outputPath, 'results.json'), 'utf8');
     assert.equal(JSON.parse(saved).comparisonClass, 'control-only');
+    assert.equal(JSON.parse(saved).benchmark.version, '0.1.0');
+    assert.equal(JSON.parse(saved).benchmark.playwrightVersion, '1.60.0');
+    assert.equal(JSON.parse(saved).agent.adapterVersion, '0.1.0');
+    assert.match(JSON.parse(saved).benchmark.gitCommit, /^[a-f0-9]{40}$/);
+    assert.equal(typeof JSON.parse(saved).benchmark.trackedChanges, 'boolean');
     await assert.rejects(exec(process.execPath, args), error => {
       assert.match(error.stderr, /EEXIST/);
       return true;

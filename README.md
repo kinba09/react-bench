@@ -52,7 +52,7 @@ Reaction latency is **browser software activation → browser click-handler regi
 
 Each trial uses a fresh browser context and a newly created adapter. Input is one-shot and closes with the trial. Failed trials remain in correct/total counts; the median includes successful reactions only. P95 is unavailable in this initial slice and is displayed as **insufficient samples** for the initial profile. No composite score is produced.
 
-Use the same seed, configuration, browser version, OS/hardware, viewport, and observation policy for comparisons. Seeds reproduce scenario parameters and order, not identical measured execution timing across runs or machines. The generated report records these settings and hardware metadata.
+Use the same seed, configuration, browser version, OS/hardware, viewport, and observation policy for comparisons. Seeds reproduce scenario parameters and order, not identical measured execution timing across runs or machines. The generated report records these settings, hardware metadata, benchmark/adapter and Playwright versions, the available Git commit, and whether tracked source changes were present. Git revision fields remain unknown when running a source archive without Git.
 
 ## Modules and validation
 

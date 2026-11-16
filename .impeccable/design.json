@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-16T17:57:11.207938+00:00",
+  "title": "Design System: ReactBench",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.01840 262.18)",
+          "oklch(26.43% 0.01840 262.18)",
+          "oklch(37.86% 0.01840 262.18)",
+          "oklch(49.29% 0.01840 262.18)",
+          "oklch(60.71% 0.01840 262.18)",
+          "oklch(72.14% 0.01840 262.18)",
+          "oklch(83.57% 0.01840 262.18)",
+          "oklch(95.00% 0.01840 262.18)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.02194 255.61)",
+          "oklch(26.43% 0.02194 255.61)",
+          "oklch(37.86% 0.02194 255.61)",
+          "oklch(49.29% 0.02194 255.61)",
+          "oklch(60.71% 0.02194 255.61)",
+          "oklch(72.14% 0.02194 255.61)",
+          "oklch(83.57% 0.02194 255.61)",
+          "oklch(95.00% 0.02194 255.61)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "tonalRamp": [
+          "oklch(15.00% 0.00808 253.86)",
+          "oklch(26.43% 0.00808 253.86)",
+          "oklch(37.86% 0.00808 253.86)",
+          "oklch(49.29% 0.00808 253.86)",
+          "oklch(60.71% 0.00808 253.86)",
+          "oklch(72.14% 0.00808 253.86)",
+          "oklch(83.57% 0.00808 253.86)",
+          "oklch(95.00% 0.00808 253.86)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 0.00)",
+          "oklch(26.43% 0.00000 0.00)",
+          "oklch(37.86% 0.00000 0.00)",
+          "oklch(49.29% 0.00000 0.00)",
+          "oklch(60.71% 0.00000 0.00)",
+          "oklch(72.14% 0.00000 0.00)",
+          "oklch(83.57% 0.00000 0.00)",
+          "oklch(95.00% 0.00000 0.00)"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "tonalRamp": [
+          "oklch(15.00% 0.00287 264.54)",
+          "oklch(26.43% 0.00287 264.54)",
+          "oklch(37.86% 0.00287 264.54)",
+          "oklch(49.29% 0.00287 264.54)",
+          "oklch(60.71% 0.00287 264.54)",
+          "oklch(72.14% 0.00287 264.54)",
+          "oklch(83.57% 0.00287 264.54)",
+          "oklch(95.00% 0.00287 264.54)"
+        ]
+      },
+      "target-ready": {
+        "role": "primary",
+        "displayName": "Ready Red",
+        "tonalRamp": [
+          "oklch(15.00% 0.17577 27.37)",
+          "oklch(26.43% 0.17577 27.37)",
+          "oklch(37.86% 0.17577 27.37)",
+          "oklch(49.29% 0.17577 27.37)",
+          "oklch(60.71% 0.17577 27.37)",
+          "oklch(72.14% 0.17577 27.37)",
+          "oklch(83.57% 0.17577 27.37)",
+          "oklch(95.00% 0.17577 27.37)"
+        ]
+      },
+      "target-active": {
+        "role": "primary",
+        "displayName": "Active Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.12259 155.63)",
+          "oklch(26.43% 0.12259 155.63)",
+          "oklch(37.86% 0.12259 155.63)",
+          "oklch(49.29% 0.12259 155.63)",
+          "oklch(60.71% 0.12259 155.63)",
+          "oklch(72.14% 0.12259 155.63)",
+          "oklch(83.57% 0.12259 155.63)",
+          "oklch(95.00% 0.12259 155.63)"
+        ]
+      },
+      "target-complete": {
+        "role": "neutral",
+        "displayName": "Complete Gray",
+        "tonalRamp": [
+          "oklch(15.00% 0.02105 255.59)",
+          "oklch(26.43% 0.02105 255.59)",
+          "oklch(37.86% 0.02105 255.59)",
+          "oklch(49.29% 0.02105 255.59)",
+          "oklch(60.71% 0.02105 255.59)",
+          "oklch(72.14% 0.02105 255.59)",
+          "oklch(83.57% 0.02105 255.59)",
+          "oklch(95.00% 0.02105 255.59)"
+        ]
+      },
+      "target-center": {
+        "role": "neutral",
+        "displayName": "Target Center White",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 0.00)",
+          "oklch(26.43% 0.00000 0.00)",
+          "oklch(37.86% 0.00000 0.00)",
+          "oklch(49.29% 0.00000 0.00)",
+          "oklch(60.71% 0.00000 0.00)",
+          "oklch(72.14% 0.00000 0.00)",
+          "oklch(83.57% 0.00000 0.00)",
+          "oklch(95.00% 0.00000 0.00)"
+        ]
+      },
+      "button-hover": {
+        "role": "neutral",
+        "displayName": "Button Hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.03076 257.68)",
+          "oklch(26.43% 0.03076 257.68)",
+          "oklch(37.86% 0.03076 257.68)",
+          "oklch(49.29% 0.03076 257.68)",
+          "oklch(60.71% 0.03076 257.68)",
+          "oklch(72.14% 0.03076 257.68)",
+          "oklch(83.57% 0.03076 257.68)",
+          "oklch(95.00% 0.03076 257.68)"
+        ]
+      },
+      "disabled-ink": {
+        "role": "neutral",
+        "displayName": "Disabled Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.02270 260.15)",
+          "oklch(26.43% 0.02270 260.15)",
+          "oklch(37.86% 0.02270 260.15)",
+          "oklch(49.29% 0.02270 260.15)",
+          "oklch(60.71% 0.02270 260.15)",
+          "oklch(72.14% 0.02270 260.15)",
+          "oklch(83.57% 0.02270 260.15)",
+          "oklch(95.00% 0.02270 260.15)"
+        ]
+      },
+      "disabled-surface": {
+        "role": "neutral",
+        "displayName": "Disabled Surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.00750 260.73)",
+          "oklch(26.43% 0.00750 260.73)",
+          "oklch(37.86% 0.00750 260.73)",
+          "oklch(49.29% 0.00750 260.73)",
+          "oklch(60.71% 0.00750 260.73)",
+          "oklch(72.14% 0.00750 260.73)",
+          "oklch(83.57% 0.00750 260.73)",
+          "oklch(95.00% 0.00750 260.73)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "tonalRamp": [
+          "oklch(15.00% 0.12069 247.19)",
+          "oklch(26.43% 0.12069 247.19)",
+          "oklch(37.86% 0.12069 247.19)",
+          "oklch(49.29% 0.12069 247.19)",
+          "oklch(60.71% 0.12069 247.19)",
+          "oklch(72.14% 0.12069 247.19)",
+          "oklch(83.57% 0.12069 247.19)",
+          "oklch(95.00% 0.12069 247.19)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Selection Blue",
+        "tonalRamp": [
+          "oklch(15.00% 0.04913 251.23)",
+          "oklch(26.43% 0.04913 251.23)",
+          "oklch(37.86% 0.04913 251.23)",
+          "oklch(49.29% 0.04913 251.23)",
+          "oklch(60.71% 0.04913 251.23)",
+          "oklch(72.14% 0.04913 251.23)",
+          "oklch(83.57% 0.04913 251.23)",
+          "oklch(95.00% 0.04913 251.23)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Task title",
+        "purpose": "Visual Reaction heading; reduces to 27px at the mobile breakpoint."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Compact ReactBench text identity."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default page text and introductory instruction."
+      },
+      "status": {
+        "displayName": "Status",
+        "purpose": "Semibold task phase label."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Supporting instructions, rules, controls, and trial information."
+      },
+      "metric-label": {
+        "displayName": "Metric label",
+        "purpose": "Response-window and result captions."
+      },
+      "footer": {
+        "displayName": "Footer",
+        "purpose": "Quiet implementation and version text."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "650px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Start trial button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact primary practice action; disabled while a trial runs.",
+      "html": "<button class=\"ds-start\" type=\"button\">Start trial</button>",
+      "css": ".ds-start{font-family:'Avenir Next','Segoe UI',sans-serif;font-size:13px;line-height:1.5;min-height:38px;border:1px solid var(--line,#dce0e5);border-radius:6px;padding:8px 12px;color:#fff;background:var(--ink,#20252e);cursor:pointer;border-color:var(--ink,#20252e);font-weight:600;}.ds-start:hover{background:#3c4757}.ds-start:focus-visible{outline:3px solid #216eab;outline-offset:3px;}.ds-start:disabled{cursor:wait;color:#636b78;background:#e3e6eb;border-color:#e3e6eb}"
+    },
+    {
+      "name": "Running trial button",
+      "kind": "button",
+      "refersTo": "button-primary-disabled",
+      "description": "The same action in its implemented disabled state.",
+      "html": "<button class=\"ds-running\" type=\"button\" disabled>Start trial</button>",
+      "css": ".ds-running{font-family:'Avenir Next','Segoe UI',sans-serif;font-size:13px;line-height:1.5;min-height:38px;border:1px solid var(--line,#dce0e5);border-radius:6px;padding:8px 12px;color:#fff;background:var(--ink,#20252e);cursor:pointer;border-color:var(--ink,#20252e);font-weight:600;}.ds-running:disabled{cursor:wait;color:#636b78;background:#e3e6eb;border-color:#e3e6eb}"
+    },
+    {
+      "name": "Practice difficulty",
+      "kind": "input",
+      "refersTo": "select",
+      "description": "Native difficulty selector, paired with a muted label.",
+      "html": "<label class=\"ds-label\" for=\"ds-level\">Practice difficulty</label> <select class=\"ds-select\" id=\"ds-level\"><option>Level 1 \u00b7 5 seconds</option><option>Level 2 \u00b7 4 seconds</option><option>Level 3 \u00b7 3 seconds</option><option>Level 4 \u00b7 2 seconds</option><option>Level 5 \u00b7 1 second</option></select>",
+      "css": ".ds-label{font-family:'Avenir Next','Segoe UI',sans-serif;font-size:13px;color:var(--muted,#616a76)}.ds-select{font-family:'Avenir Next','Segoe UI',sans-serif;font-size:13px;line-height:1.5;min-height:38px;border:1px solid var(--line,#dce0e5);border-radius:6px;padding:8px 12px;color:var(--ink,#20252e);background:var(--surface,#fff)}.ds-select:focus-visible{outline:3px solid #216eab;outline-offset:3px;}"
+    },
+    {
+      "name": "Experiment surface",
+      "kind": "card",
+      "refersTo": "experiment",
+      "description": "Flat white task arena with a thin border and rounded clipping.",
+      "html": "<section class=\"ds-experiment\" aria-label=\"Visual Reaction game\"><div class=\"ds-arena\" aria-label=\"Task arena\"></div></section>",
+      "css": ".ds-experiment{overflow:hidden;border:1px solid var(--line,#dce0e5);border-radius:12px;background:var(--surface,#fff)}.ds-arena{height:310px;cursor:crosshair;touch-action:manipulation}@media(max-width:650px){.ds-arena{height:300px}}"
+    },
+    {
+      "name": "Phase strip",
+      "kind": "custom",
+      "description": "Phase, live instruction, and attempt label above the arena.",
+      "html": "<div class=\"ds-phase\"><span class=\"ds-state\">Ready</span><p class=\"ds-instruction\" aria-live=\"polite\">Wait for green. Then click once.</p><span class=\"ds-attempt\">One attempt</span></div>",
+      "css": ".ds-phase{font-family:'Avenir Next','Segoe UI',sans-serif;color:var(--ink,#20252e);background:var(--surface,#fff);display:flex;align-items:center;gap:18px;padding:16px 22px;min-height:57px;border-bottom:1px solid var(--line,#dce0e5)}.ds-state{min-width:70px;font-weight:600;font-size:14px}.ds-instruction{margin:0;color:var(--muted,#616a76);font-size:14px}.ds-attempt{margin-left:auto;white-space:nowrap;font-size:13px;color:var(--muted,#616a76)}@media(max-width:650px){.ds-phase{flex-wrap:wrap;gap:4px 12px;padding:12px 15px}.ds-instruction{order:3;width:100%;font-size:13px}}"
+    },
+    {
+      "name": "Active target",
+      "kind": "custom",
+      "refersTo": "target-active",
+      "description": "Static CSS preview of the canvas-drawn active cue. Production radius and position come from the scenario; red precedes green and gray follows completion.",
+      "html": "<div class=\"ds-target\" role=\"img\" aria-label=\"Active green target\"><span class=\"ds-center\"></span></div>",
+      "css": ".ds-target{position:relative;width:84px;height:84px;border-radius:50%;background:#15804c}.ds-center{position:absolute;left:calc(50% - 4px);top:calc(50% - 4px);width:8px;height:8px;border-radius:50%;background:#ffffff}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Quiet operation",
+    "overview": "This describes the shipped Visual Reaction interface, extracted from the implementation rather than a separate user-approved aesthetic. A light neutral frame supports a large, uncluttered task arena. Phase instructions, trial and level, response window, and result remain readable around the target.",
+    "keyCharacteristics": [
+      "Neutral surfaces and dark, compact type.",
+      "A red-to-green circular cue as the task's visual focus.",
+      "Explicit phase text and restrained practice controls.",
+      "Flat surfaces, thin borders, and generous arena space."
+    ],
+    "rules": [
+      {
+        "name": "The Cue Rule",
+        "body": "Preserve the target's phase colors alongside explicit written phase instructions.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do keep phase instructions, trial, level, response window, and result legible around the arena.",
+      "Do use neutral framing and the existing target colors for the implemented task.",
+      "Do retain visible keyboard focus and mobile wrapping for practice controls."
+    ],
+    "donts": [
+      "Don't replace the written phase and outcome information with color alone.",
+      "Don't obscure the target with decorative imagery or overlays.",
+      "Don't treat this implementation snapshot as evidence of user-approved branding or a permanent direction for unimplemented categories."
+    ]
+  }
+}

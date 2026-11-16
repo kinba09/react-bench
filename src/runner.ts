@@ -9,6 +9,7 @@ import { ObservationSampler } from './observations.js';
 import { createPlan, defaultConfig, validateConfig, visualReaction } from './registry.js';
 import { summarize, writeReport } from './reporter.js';
 import { startServer } from './server.js';
+import { benchmarkProvenance } from './provenance.js';
 import type { ActionRecord, AgentAdapter, OracleContext, PrivilegedAdapter, RunReport, Scenario, TrialResult, VisualContext } from './types.js';
 
 function hasOracleAccess(adapter: AgentAdapter): adapter is PrivilegedAdapter {
@@ -31,7 +32,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
   let sampler: ObservationSampler | undefined;
   try {
     const page: Page = await browserContext.newPage();
-    await page.goto(`${url}/?controlled=1`);
+    await page.goto(`${url}/?controlled=1&access=${adapter.metadata.access}`);
     await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
     await page.evaluate(({ scenario, index, total }) => window.reactBenchEnvironment.prepare(scenario, index, total), { scenario, index, total });
     const browserTimeOriginMs = await page.evaluate(() => performance.timeOrigin);
@@ -119,6 +120,7 @@ export async function runBenchmark(options: RunOptions = {}): Promise<RunReport>
       trials.push(await runTrial(browser, server.url, scenario, index + 1, plan.length, adapter, config.screenshotsPerSecond));
     }
     const report: RunReport = { schemaVersion: 1, runId: randomUUID(), createdAt: new Date().toISOString(), category: config.category,
+      benchmark: benchmarkProvenance(),
       comparisonClass: agent!.access === 'privileged-oracle' ? 'control-only' : 'visual', agent: agent!, config,
       environment: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1,
         browser: 'chromium', browserVersion: browser.version(), headless: !options.headed, nodeVersion: process.version,

@@ -1,9 +1,10 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { OracleContext, PrivilegedAdapter } from '../types.js';
+import { benchmarkVersion } from '../provenance.js';
 
 /** Privileged control: this deliberately uses environment state, never a fair visual competitor. */
 export class OracleAdapter implements PrivilegedAdapter {
-  metadata = { name: 'scripted-playwright-oracle', model: null, access: 'privileged-oracle' as const };
+  metadata = { name: 'scripted-playwright-oracle', model: null, access: 'privileged-oracle' as const, adapterVersion: benchmarkVersion };
   async prepare(_context: OracleContext): Promise<void> {}
   async waitForActive(context: OracleContext): Promise<boolean> {
     while (!context.signal.aborted) {

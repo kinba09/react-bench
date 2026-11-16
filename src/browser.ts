@@ -11,7 +11,9 @@ const levelLabel = document.querySelector<HTMLElement>('#level-label')!;
 const result = document.querySelector<HTMLElement>('#result')!;
 const controlled = new URLSearchParams(location.search).has('controlled');
 document.querySelector<HTMLElement>('#practice-controls')!.hidden = controlled;
-document.querySelector<HTMLElement>('#mode')!.textContent = controlled ? 'Oracle control baseline' : 'Local practice';
+const access = new URLSearchParams(location.search).get('access');
+document.querySelector<HTMLElement>('#mode')!.textContent = !controlled ? 'Local practice'
+  : access === 'privileged-oracle' ? 'Oracle control baseline' : 'Visual agent evaluation';
 let scenario: Scenario;
 let phase: SceneSnapshot['phase'] = 'prepared';
 let events: BrowserEvent[] = [];

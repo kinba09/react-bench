@@ -81,6 +81,7 @@ export interface OracleContext extends VisualContext {
 export interface AgentMetadata {
   name: string;
   model: string | null;
+  adapterVersion?: string | null;
   access: 'privileged-oracle' | 'visual';
 }
 export interface VisualAdapter {
@@ -126,6 +127,7 @@ export interface RunReport {
   runId: string;
   createdAt: string;
   category: 'visual-reaction';
+  benchmark: { name: 'reactbench'; version: string; playwrightVersion: string; gitCommit: string | null; trackedChanges: boolean | null };
   comparisonClass: 'control-only' | 'visual';
   agent: AgentMetadata;
   config: BenchmarkConfig;
