@@ -1,0 +1,158 @@
+export type Level = 1 | 2 | 3 | 4 | 5;
+export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
+export interface BenchmarkConfig {
+  category: 'visual-reaction';
+  seed: string;
+  levels: Level[];
+  trialsPerLevel: number;
+  screenshotsPerSecond: number;
+  initialDelayMs: [number, number];
+  responseWindowsMs: [number, number, number, number, number];
+}
+export interface Scenario {
+  id: string;
+  category: 'visual-reaction';
+  seed: string;
+  level: Level;
+  repetition: number;
+  initialDelayMs: number;
+  responseWindowMs: number;
+  target: { u: number; v: number; radius: number };
+}
+export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
+export interface BrowserEvent {
+  trialId: string;
+  type: BrowserEventType;
+  atMs: number;
+  clock: 'browser-performance';
+  phase: 'prepared' | 'waiting' | 'active' | 'complete';
+  plannedActivationAtMs?: number;
+  deadlineAtMs?: number;
+  x?: number;
+  y?: number;
+  hit?: boolean;
+  inputTrusted?: boolean;
+}
+export interface SceneSnapshot {
+  trialId: string;
+  phase: BrowserEvent['phase'];
+  nowMs: number;
+  target: { x: number; y: number; radius: number };
+  events: BrowserEvent[];
+}
+export interface ObservationRecord {
+  id: string;
+  clock: 'runner-performance';
+  requestedAtMs: number;
+  returnedAtMs: number;
+  exactCaptureAtMs: null;
+  byteLength: number;
+  deliveries: number[];
+}
+export interface Observation {
+  id: string;
+  image: Uint8Array;
+  mimeType: 'image/png';
+  width: 1280;
+  height: 720;
+}
+export interface ActionRecord {
+  id: string;
+  observationId: string | null;
+  type: 'click';
+  x: number;
+  y: number;
+  submittedAtMs: number;
+  decisionCompletedAtMs: null;
+  dispatchedAtMs: number;
+  returnedAtMs: number | null;
+  clock: 'runner-performance';
+}
+export interface VisualContext {
+  trialId: string;
+  instructions: string;
+  signal: AbortSignal;
+  observe(): Observation | null;
+  input: { click(x: number, y: number, observationId?: string): Promise<void> };
+}
+export interface OracleContext extends VisualContext {
+  oracle: { snapshot(): Promise<SceneSnapshot> };
+}
+export interface AgentMetadata {
+  name: string;
+  model: string | null;
+  access: 'privileged-oracle' | 'visual';
+}
+export interface VisualAdapter {
+  metadata: AgentMetadata & { access: 'visual' };
+  prepare(context: VisualContext): Promise<void>;
+  run(context: VisualContext): Promise<void>;
+}
+export interface PrivilegedAdapter {
+  metadata: AgentMetadata & { access: 'privileged-oracle' };
+  prepare(context: OracleContext): Promise<void>;
+  run(context: OracleContext): Promise<void>;
+}
+export type AgentAdapter = VisualAdapter | PrivilegedAdapter;
+export interface TrialResult {
+  id: string;
+  scenario: Scenario;
+  outcome: Outcome;
+  events: BrowserEvent[];
+  observations: ObservationRecord[];
+  actions: ActionRecord[];
+  timing: {
+    preparationMs: number;
+    reactionLatencyMs: number | null;
+    modelProcessingMs: null;
+    measuredCaptureHz: number | null;
+    browserTimeOriginMs: number;
+    runnerClock: 'runner-performance';
+    reactionClock: 'browser-performance';
+    measurement: 'software-activation-to-input-handler';
+  };
+}
+export interface RunSummary {
+  total: number;
+  correct: number;
+  completionRate: number;
+  medianReactionLatencyMs: number | null;
+  p95: { value: null; status: 'insufficient-samples' };
+  failures: Record<Exclude<Outcome, 'success'>, number>;
+  byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null }[];
+}
+export interface RunReport {
+  schemaVersion: 1;
+  runId: string;
+  createdAt: string;
+  category: 'visual-reaction';
+  comparisonClass: 'control-only' | 'visual';
+  agent: AgentMetadata;
+  config: BenchmarkConfig;
+  environment: {
+    viewport: { width: 1280; height: 720 };
+    deviceScaleFactor: 1;
+    browser: string;
+    browserVersion: string;
+    headless: boolean;
+    nodeVersion: string;
+    platform: string;
+    architecture: string;
+    cpu: string;
+    cpuCount: number;
+    memoryBytes: number;
+    actionInterface: 'playwright-mouse';
+    targetRadiusPx: number;
+  };
+  summary: RunSummary;
+  trials: TrialResult[];
+}
+
+export interface BrowserEnvironment {
+  prepare(scenario: Scenario, index: number, total: number): SceneSnapshot;
+  start(): void;
+  snapshot(): SceneSnapshot;
+}
+declare global {
+  interface Window { reactBenchEnvironment: BrowserEnvironment }
+}

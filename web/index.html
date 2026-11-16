@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f8">
+  <title>Visual Reaction · ReactBench</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/browser.js"></script>
+</head>
+<body>
+  <header><span class="wordmark">ReactBench<span class="wordmark-dot"></span></span><span class="mode" id="mode">Local practice</span></header>
+  <main>
+    <section class="introduction">
+      <div><h1>Visual reaction</h1><p>Wait for green.<br> Make one precise click.</p></div>
+      <div class="trial-info"><span id="progress">Trial 1 of 1</span><strong id="level-label">Level 1</strong></div>
+    </section>
+    <section class="experiment" aria-label="Visual Reaction game">
+      <div class="experiment-bar"><span class="state" id="status">Ready</span><p id="instruction" aria-live="polite">Wait for green. Then click once.</p><span class="attempt">One attempt</span></div>
+      <canvas id="arena" aria-label="Click the circular target only after it turns green."></canvas>
+    </section>
+    <section class="below-game">
+      <div class="rules"><h2>The task</h2><p id="rules">Wait while the target is red. Click once it turns green.</p></div>
+      <dl><div><dt>Response window</dt><dd id="window">5 s</dd></div><div><dt>Last result</dt><dd id="result">—</dd></div></dl>
+    </section>
+    <form id="practice-controls" data-control>
+      <label for="practice-level">Practice difficulty</label>
+      <select id="practice-level" aria-label="Practice difficulty"><option value="1">Level 1 · 5 seconds</option><option value="2">Level 2 · 4 seconds</option><option value="3">Level 3 · 3 seconds</option><option value="4">Level 4 · 2 seconds</option><option value="5">Level 5 · 1 second</option></select>
+      <button type="button" id="start">Start trial</button>
+    </form>
+  </main>
+  <footer><span>Local, deterministic browser tasks</span><span>Visual Reaction · v0.1</span></footer>
+</body>
+</html>

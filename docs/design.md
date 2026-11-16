@@ -1,6 +1,6 @@
 # ReactBench design discussion
 
-This document captures the agreed design. Timing defaults remain uncalibrated, and implementation has not started.
+This document captures the agreed design. Timing defaults remain uncalibrated. Issue #2 implements the Visual Reaction slice; the remaining categories and client integrations are planned separately.
 
 ## Agreed scope
 
@@ -83,7 +83,7 @@ The initial report includes correct/total counts, individual outcomes, and measu
 3. Timing configuration: agreed, including response windows, cue delays, Watch → Hidden → Click phases, viewport, device scale, and screenshot cadence.
 4. Run protocol: preparation, trial isolation, matched seeded scenarios, trusted adapter boundaries, and stop-delay randomization agreed. Initial small-sample reporting is agreed.
 5. Execution surfaces: Codex CLI and Claude Code are agreed client integrations through a shared restricted MCP screenshot/action bridge. A provider-neutral adapter interface also supports users bringing API-backed or local agents without a coding subscription; integrations require implementation validation.
-6. Implementation: requires a user request; the original pasted proposal is design input, not an instruction to begin building.
+6. Implementation: issue #2 delivers the Visual Reaction oracle path. The remaining sub-issues define the rest of the MVP.
 
 ## Agreed client integrations
 
@@ -98,7 +98,7 @@ Claude Code is also included in the design. Official documentation supports elig
 - Record browser outcomes and exposed tool/adapter timings; internal model processing remains unavailable when not exposed.
 - Identify results by the configured client, model, and bridge; these measure the complete agent setup. Subscription usage limits apply; provider API usage has separate billing.
 
-These adapters have not been implemented or validated. ReactBench currently contains design documents, not runnable games.
+These client adapters have not been implemented or validated. Visual Reaction can run locally through the offline oracle; the other categories and client integrations remain separate implementation tickets.
 
 References: [authentication](https://learn.chatgpt.com/docs/auth), [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode), [separate API billing](https://help.openai.com/en/articles/9039756-managing-billing-for-chatgpt-and-the-api-platform).
 

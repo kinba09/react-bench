@@ -1,0 +1,20 @@
+{
+  "name": "reactbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible real-time browser tasks for computer-use agent evaluation",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:runner": "npm run build && node --test tests/runner.test.mjs",
+    "benchmark": "npm run build && node dist/cli.js run",
+    "dev": "npm run build && node dist/cli.js serve",
+    "browsers": "playwright install chromium"
+  },
+  "dependencies": { "playwright": "1.60.0" },
+  "devDependencies": { "@types/node": "20.14.12", "typescript": "5.9.3" }
+}
