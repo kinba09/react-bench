@@ -30,7 +30,8 @@ async function main(): Promise<void> {
   const config = validateConfig(raw);
   if (values.seed !== undefined) config.seed = values.seed;
   const outputDir = resolve(values.output ?? `results/${new Date().toISOString().replace(/[:.]/g, '-')}`);
-  console.log('Running Visual Reaction · privileged oracle control · 1280 × 720 · scale 1');
+  const categoryTitle = config.category === 'dynamic-tracking' ? 'Dynamic Tracking' : 'Visual Reaction';
+  console.log(`Running ${categoryTitle} · privileged oracle control · 1280 × 720 · scale 1`);
   const report = await runBenchmark({ config, outputDir, headed: values.headed ?? false });
   console.log(`${report.summary.correct} / ${report.summary.total} correct\nSuccessful-response median: ${report.summary.medianReactionLatencyMs?.toFixed(1) ?? 'unavailable'} ms\nP95: insufficient samples\nResults: ${outputDir}`);
 }

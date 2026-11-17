@@ -6,18 +6,18 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { OracleAdapter } from './adapters/oracle.js';
 import { grade } from './grader.js';
 import { ObservationSampler } from './observations.js';
-import { createPlan, defaultConfig, validateConfig, visualReaction } from './registry.js';
+import { createPlan, defaultConfig, dynamicTrackingSpeedPxPerSecond, dynamicTrackingTargetRadiusPx, instructionsForScenario, validateConfig } from './registry.js';
 import { summarize, writeReport } from './reporter.js';
 import { startServer } from './server.js';
 import { benchmarkProvenance } from './provenance.js';
-import type { ActionRecord, AgentAdapter, OracleContext, PrivilegedAdapter, RunReport, Scenario, TrialResult, VisualContext } from './types.js';
+import type { ActionRecord, AgentAdapter, BenchmarkConfig, OracleContext, PrivilegedAdapter, RunReport, Scenario, TrialResult, VisualContext } from './types.js';
 
 function hasOracleAccess(adapter: AgentAdapter): adapter is PrivilegedAdapter {
   return adapter.metadata.access === 'privileged-oracle';
 }
 
 export interface RunOptions {
-  config?: typeof defaultConfig;
+  config?: BenchmarkConfig;
   outputDir?: string;
   headed?: boolean;
   adapterFactory?: () => AgentAdapter;
@@ -43,7 +43,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     let started = false;
     let attempted = false;
     const context: VisualContext = {
-      trialId: scenario.id, instructions: visualReaction.instructions, signal: controller.signal,
+      trialId: scenario.id, instructions: instructionsForScenario(scenario), signal: controller.signal,
       observe: () => controller.signal.aborted ? null : observations.observe(),
       input: {
         async click(x, y, observationId) {
@@ -76,7 +76,8 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     try {
       await Promise.race([
         page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined,
-          { timeout: scenario.initialDelayMs + scenario.responseWindowMs + 10_000 }),
+          { timeout: scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs + 10_000
+            : scenario.initialDelayMs + scenario.responseWindowMs + 10_000 }),
         failure, observations.failure,
       ]);
     } finally {
@@ -89,12 +90,12 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     const last = observations.records.at(-1);
     const measuredCaptureHz = first && last && first !== last
       ? (observations.records.length - 1) * 1000 / (last.requestedAtMs - first.requestedAtMs) : null;
-    const graded = grade(snapshot.events);
+    const graded = grade(snapshot.events, scenario.category);
     return { id: scenario.id, scenario, outcome: graded.outcome, events: snapshot.events,
       actions, observations: observations.records,
       timing: { preparationMs, reactionLatencyMs: graded.reactionLatencyMs, modelProcessingMs: null,
         measuredCaptureHz, browserTimeOriginMs, runnerClock: 'runner-performance', reactionClock: 'browser-performance',
-        measurement: 'software-activation-to-input-handler' },
+        measurement: scenario.category === 'dynamic-tracking' ? 'trial-start-to-input-handler' : 'software-activation-to-input-handler' },
     };
   } finally {
     controller.abort();
@@ -125,8 +126,10 @@ export async function runBenchmark(options: RunOptions = {}): Promise<RunReport>
       environment: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1,
         browser: 'chromium', browserVersion: browser.version(), headless: !options.headed, nodeVersion: process.version,
         platform: platform(), architecture: arch(), cpu: cpus()[0]?.model ?? 'unknown', cpuCount: cpus().length,
-        memoryBytes: totalmem(), actionInterface: 'playwright-mouse', targetRadiusPx: 42 },
-      trials, summary: summarize(trials),
+        memoryBytes: totalmem(), actionInterface: 'playwright-mouse',
+        targetRadiusPx: config.category === 'dynamic-tracking' ? dynamicTrackingTargetRadiusPx : 42,
+        movementSpeedPxPerSecond: config.category === 'dynamic-tracking' ? dynamicTrackingSpeedPxPerSecond : null },
+      trials, summary: summarize(trials, config.category),
     };
     if (options.outputDir) await writeReport(report, options.outputDir);
     return report;

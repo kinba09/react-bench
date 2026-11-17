@@ -19,6 +19,11 @@ export class OracleAdapter implements PrivilegedAdapter {
     if (!await this.waitForActive(context)) return;
     const image = context.observe();
     const state = await context.oracle.snapshot();
-    await context.input.click(state.target.x, state.target.y, image?.id);
+    if (state.target) {
+      await context.input.click(state.target.x, state.target.y, image?.id);
+      return;
+    }
+    const target = state.objects?.find(object => object.id === state.requiredTargetId);
+    if (target) await context.input.click(target.x, target.y, image?.id);
   }
 }
