@@ -1,6 +1,6 @@
 ---
 name: ReactBench
-description: Quiet operational interface for the implemented Visual Reaction task.
+description: Quiet operational interface for Visual Reaction and Dynamic Tracking tasks.
 colors:
   ink: "#20252e"
   muted: "#616a76"
@@ -11,6 +11,9 @@ colors:
   target-active: "#15804c"
   target-complete: "#7c8591"
   target-center: "#ffffff"
+  tracking-required: "#e5a82e"
+  tracking-distractor: "#e5edf5"
+  tracking-outline: "#55718c"
   button-hover: "#3c4757"
   disabled-ink: "#636b78"
   disabled-surface: "#e3e6eb"
@@ -86,11 +89,11 @@ components:
 
 **Creative North Star: "Quiet operation"**
 
-This describes the shipped Visual Reaction interface, extracted from the implementation rather than a separate user-approved aesthetic. A light neutral frame supports a large, uncluttered task arena. Phase instructions, trial and level, response window, and result remain readable around the target.
+This describes the shipped benchmark interface, extracted from the implementation rather than a separate user-approved aesthetic. A light neutral frame supports a large task arena. Instructions, trial and level, response window, and result remain readable around either target task.
 
 **Key Characteristics:**
 - Neutral surfaces and dark, compact type.
-- A red-to-green circular cue as the task's visual focus.
+- A red-to-green cue or gold reference star as the task's visual focus.
 - Explicit phase text and restrained practice controls.
 - Flat surfaces, thin borders, and generous arena space.
 
@@ -112,7 +115,7 @@ The palette uses neutral framing with functional cue colors; frontmatter records
 - **Button Hover**, **Disabled Ink**, and **Disabled Surface** distinguish control states.
 - **Focus Blue** identifies keyboard focus. **Selection Blue** backs selected text with white foreground.
 
-**The Cue Rule.** Preserve the target's phase colors alongside explicit written phase instructions.
+**The Cue Rule.** Preserve the target's visual identity alongside an explicit written reference or phase instruction.
 
 ## Typography
 
@@ -134,7 +137,7 @@ The implemented interface has no shadows, gradients, or animated transitions. Wh
 
 ## Shapes
 
-The experiment has softly rounded corners; controls use the smaller radius. Borders are thin (1px). The task cue is a solid circle with a white center dot (4px radius), drawn on canvas; its target radius and position come from the scenario. The wordmark uses a separate small circular dot (7px diameter).
+The experiment has softly rounded corners; controls use the smaller radius. Borders are thin (1px). The Visual Reaction cue is a solid circle with a white center dot (4px radius), drawn on canvas; its target radius and position come from the scenario. Dynamic Tracking uses one gold five-point star among neutral outlined circles, with the same star drawn in its on-canvas reference. The wordmark uses a separate small circular dot (7px diameter).
 
 ## Components
 
@@ -148,7 +151,7 @@ The white experiment clips its contents to the rounded border. Its status strip 
 
 ### Target and result
 
-The target changes from ready red to active green to complete gray without a decorative transition. Its white center dot persists. The arena uses a crosshair cursor and touch manipulation. Result text communicates the outcome or measured latency below the arena; it does not add an independent badge or color treatment.
+For Visual Reaction, the target changes from ready red to active green to complete gray without a decorative transition, and its white center dot persists. Dynamic Tracking keeps the star reference visible and marks the required moving target with a gold star among neutral outlined distractors. The arena uses a crosshair cursor and touch manipulation. Result text communicates the outcome or measured latency below the arena; it does not add an independent badge or color treatment.
 
 ### Practice controls
 
@@ -159,7 +162,7 @@ The label, native difficulty select, and start button form a small row after a d
 ### Do:
 
 - **Do** keep phase instructions, trial, level, response window, and result legible around the arena.
-- **Do** use neutral framing and the existing target colors for the implemented task.
+- **Do** use neutral framing and preserve each task's target identity.
 - **Do** retain visible keyboard focus and mobile wrapping for practice controls.
 
 ### Don't:

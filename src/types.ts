@@ -1,15 +1,26 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
+export type DynamicTrackingLevel = 1 | 2 | 3;
+export type Category = 'visual-reaction' | 'dynamic-tracking';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
-export interface BenchmarkConfig {
-  category: 'visual-reaction';
+interface CommonBenchmarkConfig {
   seed: string;
-  levels: Level[];
   trialsPerLevel: number;
   screenshotsPerSecond: number;
+}
+export interface VisualReactionConfig extends CommonBenchmarkConfig {
+  category: 'visual-reaction';
+  levels: Level[];
   initialDelayMs: [number, number];
   responseWindowsMs: [number, number, number, number, number];
 }
-export interface Scenario {
+export interface DynamicTrackingConfig extends CommonBenchmarkConfig {
+  category: 'dynamic-tracking';
+  initialDelayMs?: [number, number];
+  levels: DynamicTrackingLevel[];
+  clickWindowMs: number;
+}
+export type BenchmarkConfig = VisualReactionConfig | DynamicTrackingConfig;
+export interface VisualReactionScenario {
   id: string;
   category: 'visual-reaction';
   seed: string;
@@ -19,7 +30,35 @@ export interface Scenario {
   responseWindowMs: number;
   target: { u: number; v: number; radius: number };
 }
+export interface MovingObject {
+  id: string;
+  role: 'required' | 'distractor';
+  u: number;
+  v: number;
+  velocityX: number;
+  velocityY: number;
+  radius: number;
+}
+export interface DynamicTrackingScenario {
+  id: string;
+  category: 'dynamic-tracking';
+  seed: string;
+  level: DynamicTrackingLevel;
+  repetition: number;
+  clickWindowMs: number;
+  initialDelayMs: number;
+  requiredTargetId: string;
+  objects: MovingObject[];
+}
+export type Scenario = VisualReactionScenario | DynamicTrackingScenario;
 export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
+export interface MovingTargetState {
+  id: string;
+  role: MovingObject['role'];
+  x: number;
+  y: number;
+  radius: number;
+}
 export interface BrowserEvent {
   trialId: string;
   type: BrowserEventType;
@@ -32,12 +71,17 @@ export interface BrowserEvent {
   y?: number;
   hit?: boolean;
   inputTrusted?: boolean;
+  objects?: MovingTargetState[];
+  requiredTargetId?: string;
+  clickedObjectId?: string | null;
 }
 export interface SceneSnapshot {
   trialId: string;
   phase: BrowserEvent['phase'];
   nowMs: number;
   target: { x: number; y: number; radius: number };
+  objects?: MovingTargetState[];
+  requiredTargetId?: string;
   events: BrowserEvent[];
 }
 export interface ObservationRecord {
@@ -110,10 +154,11 @@ export interface TrialResult {
     browserTimeOriginMs: number;
     runnerClock: 'runner-performance';
     reactionClock: 'browser-performance';
-    measurement: 'software-activation-to-input-handler';
+    measurement: 'software-activation-to-input-handler' | 'trial-start-to-input-handler';
   };
 }
 export interface RunSummary {
+  category: Category;
   total: number;
   correct: number;
   completionRate: number;
@@ -126,7 +171,7 @@ export interface RunReport {
   schemaVersion: 1;
   runId: string;
   createdAt: string;
-  category: 'visual-reaction';
+  category: Category;
   benchmark: { name: 'reactbench'; version: string; playwrightVersion: string; gitCommit: string | null; trackedChanges: boolean | null };
   comparisonClass: 'control-only' | 'visual';
   agent: AgentMetadata;
@@ -145,6 +190,7 @@ export interface RunReport {
     memoryBytes: number;
     actionInterface: 'playwright-mouse';
     targetRadiusPx: number;
+    movementSpeedPxPerSecond: number | null;
   };
   summary: RunSummary;
   trials: TrialResult[];

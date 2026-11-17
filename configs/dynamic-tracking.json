@@ -1,0 +1,9 @@
+{
+  "category": "dynamic-tracking",
+  "seed": "reactbench-v1",
+  "levels": [1, 2, 3],
+  "trialsPerLevel": 3,
+  "screenshotsPerSecond": 2,
+  "clickWindowMs": 10000,
+  "initialDelayMs": [1000, 4000]
+}
