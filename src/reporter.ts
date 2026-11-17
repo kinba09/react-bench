@@ -35,7 +35,7 @@ export function renderReport(report: RunReport): string {
   const control = report.comparisonClass === 'control-only';
   const categoryTitle = report.category === 'dynamic-tracking' ? 'Dynamic Tracking' : 'Visual Reaction';
   const timingDescription = report.category === 'dynamic-tracking'
-    ? 'Timings measure trial start to browser click-handler registration, not physical display onset.'
+    ? 'Timings measure moving-field activation to browser click-handler registration, not physical display onset.'
     : 'Timings measure software activation to browser input registration, not physical display onset.';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ReactBench · ${categoryTitle} results</title><style>
