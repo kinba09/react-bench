@@ -76,7 +76,7 @@ test('visual adapter receives image/input capabilities without privileged state'
 
 for (const [name, override] of Object.entries({
   'duplicate levels': { levels: [1, 1] },
-  'unknown category': { category: 'target-acquisition' },
+  'unknown category': { category: 'not-implemented' },
   'empty seed': { seed: '' },
   'zero capture rate': { screenshotsPerSecond: 0 },
   'reversed delays': { initialDelayMs: [4000, 1000] },

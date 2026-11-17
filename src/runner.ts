@@ -6,7 +6,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { OracleAdapter } from './adapters/oracle.js';
 import { grade } from './grader.js';
 import { ObservationSampler } from './observations.js';
-import { createPlan, defaultConfig, dynamicTrackingSpeedPxPerSecond, dynamicTrackingTargetRadiusPx, instructionsForScenario, validateConfig } from './registry.js';
+import { createPlan, defaultConfig, dynamicTrackingSpeedPxPerSecond, dynamicTrackingTargetRadiusPx, taskRegistry, validateConfig } from './registry.js';
 import { summarize, writeReport } from './reporter.js';
 import { startServer } from './server.js';
 import { benchmarkProvenance } from './provenance.js';
@@ -43,7 +43,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     let started = false;
     let attempted = false;
     const context: VisualContext = {
-      trialId: scenario.id, instructions: instructionsForScenario(scenario), signal: controller.signal,
+      trialId: scenario.id, instructions: taskRegistry[scenario.category].instructions, signal: controller.signal,
       observe: () => controller.signal.aborted ? null : observations.observe(),
       input: {
         async click(x, y, observationId) {
@@ -76,8 +76,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     try {
       await Promise.race([
         page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined,
-          { timeout: scenario.category === 'dynamic-tracking' ? scenario.initialDelayMs + scenario.clickWindowMs + 10_000
-            : scenario.initialDelayMs + scenario.responseWindowMs + 10_000 }),
+          { timeout: scenario.initialDelayMs + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs) + 10_000 }),
         failure, observations.failure,
       ]);
     } finally {
@@ -126,8 +125,7 @@ export async function runBenchmark(options: RunOptions = {}): Promise<RunReport>
       environment: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1,
         browser: 'chromium', browserVersion: browser.version(), headless: !options.headed, nodeVersion: process.version,
         platform: platform(), architecture: arch(), cpu: cpus()[0]?.model ?? 'unknown', cpuCount: cpus().length,
-        memoryBytes: totalmem(), actionInterface: 'playwright-mouse',
-        targetRadiusPx: config.category === 'dynamic-tracking' ? dynamicTrackingTargetRadiusPx : 42,
+        memoryBytes: totalmem(), actionInterface: 'playwright-mouse', targetRadiusPx: config.category === 'target-acquisition' ? 13 : config.category === 'dynamic-tracking' ? dynamicTrackingTargetRadiusPx : 42, acquisitionObjectSizePx: 26,
         movementSpeedPxPerSecond: config.category === 'dynamic-tracking' ? dynamicTrackingSpeedPxPerSecond : null },
       trials, summary: summarize(trials, config.category),
     };

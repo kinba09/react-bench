@@ -1,34 +1,50 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
 export type DynamicTrackingLevel = 1 | 2 | 3;
-export type Category = 'visual-reaction' | 'dynamic-tracking';
+export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking';
+export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
-interface CommonBenchmarkConfig {
+
+interface SharedConfig {
   seed: string;
+  levels: Level[];
   trialsPerLevel: number;
   screenshotsPerSecond: number;
 }
-export interface VisualReactionConfig extends CommonBenchmarkConfig {
+export interface VisualReactionConfig extends SharedConfig {
   category: 'visual-reaction';
-  levels: Level[];
   initialDelayMs: [number, number];
   responseWindowsMs: [number, number, number, number, number];
 }
-export interface DynamicTrackingConfig extends CommonBenchmarkConfig {
-  category: 'dynamic-tracking';
+export interface TargetAcquisitionConfig extends SharedConfig {
+  category: 'target-acquisition';
   initialDelayMs?: [number, number];
+}
+export interface DynamicTrackingConfig extends SharedConfig {
+  category: 'dynamic-tracking';
   levels: DynamicTrackingLevel[];
   clickWindowMs: number;
+  initialDelayMs?: [number, number];
 }
-export type BenchmarkConfig = VisualReactionConfig | DynamicTrackingConfig;
-export interface VisualReactionScenario {
+export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig | DynamicTrackingConfig;
+
+interface SharedScenario {
   id: string;
-  category: 'visual-reaction';
   seed: string;
   level: Level;
   repetition: number;
-  initialDelayMs: number;
   responseWindowMs: number;
+}
+export interface VisualReactionScenario extends SharedScenario {
+  category: 'visual-reaction';
+  initialDelayMs: number;
   target: { u: number; v: number; radius: number };
+}
+export interface TargetAcquisitionScenario extends SharedScenario {
+  category: 'target-acquisition';
+  initialDelayMs: number;
+  objectSizePx: 26;
+  reference: { symbol: TargetSymbol };
+  objects: { id: string; u: number; v: number; symbol: TargetSymbol; matching: boolean }[];
 }
 export interface MovingObject {
   id: string;
@@ -50,7 +66,9 @@ export interface DynamicTrackingScenario {
   requiredTargetId: string;
   objects: MovingObject[];
 }
-export type Scenario = VisualReactionScenario | DynamicTrackingScenario;
+export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario;
+export interface AcquisitionObjectState { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }
+
 export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
 export interface MovingTargetState {
   id: string;
@@ -70,6 +88,7 @@ export interface BrowserEvent {
   x?: number;
   y?: number;
   hit?: boolean;
+  objectIndex?: number;
   inputTrusted?: boolean;
   objects?: MovingTargetState[];
   requiredTargetId?: string;
@@ -80,8 +99,9 @@ export interface SceneSnapshot {
   phase: BrowserEvent['phase'];
   nowMs: number;
   target: { x: number; y: number; radius: number };
-  objects?: MovingTargetState[];
+  objects: (AcquisitionObjectState | MovingTargetState)[];
   requiredTargetId?: string;
+  reference: { symbol: TargetSymbol } | null;
   events: BrowserEvent[];
 }
 export interface ObservationRecord {
@@ -154,7 +174,7 @@ export interface TrialResult {
     browserTimeOriginMs: number;
     runnerClock: 'runner-performance';
     reactionClock: 'browser-performance';
-    measurement: 'software-activation-to-input-handler' | 'trial-start-to-input-handler';
+    measurement: 'software-activation-to-input-handler';
   };
 }
 export interface RunSummary {
@@ -165,7 +185,7 @@ export interface RunSummary {
   medianReactionLatencyMs: number | null;
   p95: { value: null; status: 'insufficient-samples' };
   failures: Record<Exclude<Outcome, 'success'>, number>;
-  byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null }[];
+  byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null; objectsPerTrial: number | null }[];
 }
 export interface RunReport {
   schemaVersion: 1;
@@ -190,6 +210,7 @@ export interface RunReport {
     memoryBytes: number;
     actionInterface: 'playwright-mouse';
     targetRadiusPx: number;
+    acquisitionObjectSizePx: number;
     movementSpeedPxPerSecond: number | null;
   };
   summary: RunSummary;
