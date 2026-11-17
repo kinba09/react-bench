@@ -6,18 +6,18 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { OracleAdapter } from './adapters/oracle.js';
 import { grade } from './grader.js';
 import { ObservationSampler } from './observations.js';
-import { createPlan, defaultConfig, validateConfig, visualReaction } from './registry.js';
+import { createPlan, defaultConfig, taskRegistry, validateConfig } from './registry.js';
 import { summarize, writeReport } from './reporter.js';
 import { startServer } from './server.js';
 import { benchmarkProvenance } from './provenance.js';
-import type { ActionRecord, AgentAdapter, OracleContext, PrivilegedAdapter, RunReport, Scenario, TrialResult, VisualContext } from './types.js';
+import type { ActionRecord, AgentAdapter, BenchmarkConfig, OracleContext, PrivilegedAdapter, RunReport, Scenario, TrialResult, VisualContext } from './types.js';
 
 function hasOracleAccess(adapter: AgentAdapter): adapter is PrivilegedAdapter {
   return adapter.metadata.access === 'privileged-oracle';
 }
 
 export interface RunOptions {
-  config?: typeof defaultConfig;
+  config?: BenchmarkConfig;
   outputDir?: string;
   headed?: boolean;
   adapterFactory?: () => AgentAdapter;
@@ -43,7 +43,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     let started = false;
     let attempted = false;
     const context: VisualContext = {
-      trialId: scenario.id, instructions: visualReaction.instructions, signal: controller.signal,
+      trialId: scenario.id, instructions: taskRegistry[scenario.category].instructions, signal: controller.signal,
       observe: () => controller.signal.aborted ? null : observations.observe(),
       input: {
         async click(x, y, observationId) {
@@ -76,7 +76,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     try {
       await Promise.race([
         page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined,
-          { timeout: scenario.initialDelayMs + scenario.responseWindowMs + 10_000 }),
+          { timeout: (scenario.category === 'visual-reaction' ? scenario.initialDelayMs : 0) + scenario.responseWindowMs + 10_000 }),
         failure, observations.failure,
       ]);
     } finally {
@@ -125,7 +125,7 @@ export async function runBenchmark(options: RunOptions = {}): Promise<RunReport>
       environment: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1,
         browser: 'chromium', browserVersion: browser.version(), headless: !options.headed, nodeVersion: process.version,
         platform: platform(), architecture: arch(), cpu: cpus()[0]?.model ?? 'unknown', cpuCount: cpus().length,
-        memoryBytes: totalmem(), actionInterface: 'playwright-mouse', targetRadiusPx: 42 },
+        memoryBytes: totalmem(), actionInterface: 'playwright-mouse', targetRadiusPx: 42, acquisitionObjectSizePx: 26 },
       trials, summary: summarize(trials),
     };
     if (options.outputDir) await writeReport(report, options.outputDir);

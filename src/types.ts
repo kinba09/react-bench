@@ -1,24 +1,44 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
+export type Category = 'visual-reaction' | 'target-acquisition';
+export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
-export interface BenchmarkConfig {
-  category: 'visual-reaction';
+
+interface SharedConfig {
   seed: string;
   levels: Level[];
   trialsPerLevel: number;
   screenshotsPerSecond: number;
+}
+export interface VisualReactionConfig extends SharedConfig {
+  category: 'visual-reaction';
   initialDelayMs: [number, number];
   responseWindowsMs: [number, number, number, number, number];
 }
-export interface Scenario {
+export interface TargetAcquisitionConfig extends SharedConfig {
+  category: 'target-acquisition';
+}
+export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig;
+
+interface SharedScenario {
   id: string;
-  category: 'visual-reaction';
   seed: string;
   level: Level;
   repetition: number;
-  initialDelayMs: number;
   responseWindowMs: number;
+}
+export interface VisualReactionScenario extends SharedScenario {
+  category: 'visual-reaction';
+  initialDelayMs: number;
   target: { u: number; v: number; radius: number };
 }
+export interface TargetAcquisitionScenario extends SharedScenario {
+  category: 'target-acquisition';
+  objectSizePx: 26;
+  reference: { symbol: TargetSymbol };
+  objects: { id: string; u: number; v: number; symbol: TargetSymbol; matching: boolean }[];
+}
+export type Scenario = VisualReactionScenario | TargetAcquisitionScenario;
+
 export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
 export interface BrowserEvent {
   trialId: string;
@@ -31,6 +51,7 @@ export interface BrowserEvent {
   x?: number;
   y?: number;
   hit?: boolean;
+  objectIndex?: number;
   inputTrusted?: boolean;
 }
 export interface SceneSnapshot {
@@ -38,6 +59,8 @@ export interface SceneSnapshot {
   phase: BrowserEvent['phase'];
   nowMs: number;
   target: { x: number; y: number; radius: number };
+  objects: { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }[];
+  reference: { symbol: TargetSymbol } | null;
   events: BrowserEvent[];
 }
 export interface ObservationRecord {
@@ -120,13 +143,13 @@ export interface RunSummary {
   medianReactionLatencyMs: number | null;
   p95: { value: null; status: 'insufficient-samples' };
   failures: Record<Exclude<Outcome, 'success'>, number>;
-  byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null }[];
+  byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null; objectsPerTrial: number | null }[];
 }
 export interface RunReport {
   schemaVersion: 1;
   runId: string;
   createdAt: string;
-  category: 'visual-reaction';
+  category: Category;
   benchmark: { name: 'reactbench'; version: string; playwrightVersion: string; gitCommit: string | null; trackedChanges: boolean | null };
   comparisonClass: 'control-only' | 'visual';
   agent: AgentMetadata;
@@ -145,6 +168,7 @@ export interface RunReport {
     memoryBytes: number;
     actionInterface: 'playwright-mouse';
     targetRadiusPx: number;
+    acquisitionObjectSizePx: number;
   };
   summary: RunSummary;
   trials: TrialResult[];

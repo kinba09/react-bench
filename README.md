@@ -2,7 +2,7 @@
 
 A local benchmark for evaluating how accurately and quickly computer-use agents respond to dynamic graphical tasks in a controlled browser environment.
 
-**Implemented:** Visual Reaction, five levels, 15 seeded trials, a privileged Playwright oracle, browser-clock grading, independent screenshot capture, and local JSON/JSONL/HTML results. Other games and Codex/Claude integrations are tracked as separate tickets.
+**Implemented:** Visual Reaction and Target Acquisition, each with five levels and three seeded trials per level, a privileged Playwright oracle, browser-clock grading, independent screenshot capture, and local JSON/JSONL/HTML results. Other games and Codex/Claude integrations are tracked separately.
 
 ## Setup
 
@@ -31,6 +31,7 @@ The oracle reads privileged environment state and clicks through Playwright's mo
 
 ```sh
 npm run benchmark -- --config configs/visual-reaction.json --seed experiment-a --output results/experiment-a
+npm run benchmark -- --config configs/target-acquisition.json --seed experiment-a --output results/target-acquisition-experiment-a
 npm run benchmark -- --headed
 ```
 
@@ -42,11 +43,11 @@ Choose a new output directory for each run; existing result files are never over
 npm run dev
 ```
 
-Open the printed local address, select a level, and press **Start trial**. Wait while the target is red, then click the green target once. Clicking early or outside the target fails; leaving the response window without clicking expires the trial. Practice is interactive and does not create an evaluated-agent report.
+Open the printed local address, choose a game and level, and press **Start trial**. Visual Reaction asks you to click the target after it turns green. Target Acquisition asks you to match a reference shape among 6, 16, 36, 64, or 100 static objects. Every board uses a 26 CSS-pixel object diameter and a ten-second response limit. The first click ends the attempt: a wrong choice fails and cannot be rescued by another click. Practice is interactive and does not create an evaluated-agent report.
 
 ## Measurements and reproducibility
 
-Standard evaluation uses a 1280 × 720 viewport, device scale 1, a constant 42-CSS-pixel target radius, and two screenshots per second. Screenshot capture runs independently of the adapter; only the newest image buffer is retained. Logs preserve achieved cadence and capture request/return times, with exact capture time unavailable.
+Standard evaluation uses a 1280 × 720 viewport, device scale 1, and two screenshots per second. Visual Reaction uses a constant 42-CSS-pixel target radius; Target Acquisition uses constant 26-CSS-pixel shapes across all crowding levels. Target Acquisition positions and the matching shape are generated from each trial's seed. Screenshot capture runs independently of the adapter; only the newest image buffer is retained. Logs preserve achieved cadence and capture request/return times, with exact capture time unavailable.
 
 Reaction latency is **browser software activation → browser click-handler registration**, measured with `performance.now()` in the same browser context. Preparation, screenshot delivery, input submission/dispatch/return, and browser events retain their clock provenance. Browser and runner timestamps are not directly subtracted. Exact physical display onset, internal model processing, and unexposed decision-completion times are unavailable.
 
@@ -64,14 +65,14 @@ npm run test:runner
 npm test
 ```
 
-Tests exercise real Chromium through the public runner-to-report boundary: the full default 15-trial control, premature/wrong/expired responses, one-attempt behavior, seed replay, configuration validation, and visual/oracle capability separation. GitHub Actions installs Chromium and runs the same credential-free checks.
+Tests exercise real Chromium through the public runner-to-report boundary: both default 15-trial category profiles, premature/wrong/expired responses, one-attempt behavior, seeded replay, Target Acquisition crowding and deadline outcomes, configuration validation, and visual/oracle capability separation. GitHub Actions installs Chromium and runs the same credential-free checks.
 
 ## Design documents
 
 - [Design specification](docs/design.md): six game categories, five difficulty levels, initial timing settings, scoring rules, and agent integration plans.
 - [Domain glossary](GLOSSARY.md): agreed project terminology.
 
-The broader MVP design covers 90 trials: six categories × five levels × three trials. This issue implements the first category only.
+The broader MVP design covers 90 trials: six categories × five levels × three trials. Issues #2 and #3 implement the first two categories.
 
 Planned integrations include Codex CLI, Claude Code, and custom API-backed, local, or existing computer-use agents. The privileged scripted oracle supports the current offline slice and remains separate from evaluated visual-agent results.
 

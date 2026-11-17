@@ -1,0 +1,7 @@
+{
+  "category": "target-acquisition",
+  "seed": "reactbench-v1",
+  "levels": [1, 2, 3, 4, 5],
+  "trialsPerLevel": 3,
+  "screenshotsPerSecond": 2
+}

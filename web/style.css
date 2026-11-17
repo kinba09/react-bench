@@ -29,6 +29,10 @@ dt { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
 dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 form { display: flex; gap: 12px; align-items: center; margin-top: 23px; padding-top: 18px; border-top: 1px solid var(--line); }
 form[hidden] { display: none; }
+.reference { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 13px 22px 0; padding: 8px 13px; min-height: 48px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
+.reference[hidden] { display: none; }
+.reference #reference-symbol { display: block; width: 40px; height: 40px; border: 1px solid #aeb6c0; border-radius: 50%; background: #fff; }
+canvas.acquisition { height: 380px; }
 label { font-size: 13px; color: var(--muted); }
 button, select { font: inherit; font-size: 13px; min-height: 38px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; }
 select { color: var(--ink); background: var(--surface); }
