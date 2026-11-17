@@ -1,5 +1,6 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
-export type Category = 'visual-reaction' | 'target-acquisition';
+export type DynamicTrackingLevel = 1 | 2 | 3;
+export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking';
 export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
 
@@ -16,8 +17,15 @@ export interface VisualReactionConfig extends SharedConfig {
 }
 export interface TargetAcquisitionConfig extends SharedConfig {
   category: 'target-acquisition';
+  initialDelayMs?: [number, number];
 }
-export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig;
+export interface DynamicTrackingConfig extends SharedConfig {
+  category: 'dynamic-tracking';
+  levels: DynamicTrackingLevel[];
+  clickWindowMs: number;
+  initialDelayMs?: [number, number];
+}
+export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig | DynamicTrackingConfig;
 
 interface SharedScenario {
   id: string;
@@ -33,13 +41,42 @@ export interface VisualReactionScenario extends SharedScenario {
 }
 export interface TargetAcquisitionScenario extends SharedScenario {
   category: 'target-acquisition';
+  initialDelayMs: number;
   objectSizePx: 26;
   reference: { symbol: TargetSymbol };
   objects: { id: string; u: number; v: number; symbol: TargetSymbol; matching: boolean }[];
 }
-export type Scenario = VisualReactionScenario | TargetAcquisitionScenario;
+export interface MovingObject {
+  id: string;
+  role: 'required' | 'distractor';
+  u: number;
+  v: number;
+  velocityX: number;
+  velocityY: number;
+  radius: number;
+}
+export interface DynamicTrackingScenario {
+  id: string;
+  category: 'dynamic-tracking';
+  seed: string;
+  level: DynamicTrackingLevel;
+  repetition: number;
+  clickWindowMs: number;
+  initialDelayMs: number;
+  requiredTargetId: string;
+  objects: MovingObject[];
+}
+export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario;
+export interface AcquisitionObjectState { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }
 
 export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
+export interface MovingTargetState {
+  id: string;
+  role: MovingObject['role'];
+  x: number;
+  y: number;
+  radius: number;
+}
 export interface BrowserEvent {
   trialId: string;
   type: BrowserEventType;
@@ -53,13 +90,17 @@ export interface BrowserEvent {
   hit?: boolean;
   objectIndex?: number;
   inputTrusted?: boolean;
+  objects?: MovingTargetState[];
+  requiredTargetId?: string;
+  clickedObjectId?: string | null;
 }
 export interface SceneSnapshot {
   trialId: string;
   phase: BrowserEvent['phase'];
   nowMs: number;
   target: { x: number; y: number; radius: number };
-  objects: { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }[];
+  objects: (AcquisitionObjectState | MovingTargetState)[];
+  requiredTargetId?: string;
   reference: { symbol: TargetSymbol } | null;
   events: BrowserEvent[];
 }
@@ -137,6 +178,7 @@ export interface TrialResult {
   };
 }
 export interface RunSummary {
+  category: Category;
   total: number;
   correct: number;
   completionRate: number;
@@ -169,6 +211,7 @@ export interface RunReport {
     actionInterface: 'playwright-mouse';
     targetRadiusPx: number;
     acquisitionObjectSizePx: number;
+    movementSpeedPxPerSecond: number | null;
   };
   summary: RunSummary;
   trials: TrialResult[];

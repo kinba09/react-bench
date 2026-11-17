@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Level, RunReport, RunSummary, TrialResult } from './types.js';
+import { taskRegistry } from './registry.js';
+import type { Category, Level, RunReport, RunSummary, TrialResult } from './types.js';
 
 function median(values: number[]): number | null {
   if (!values.length) return null;
@@ -11,10 +12,10 @@ function median(values: number[]): number | null {
 function responseTimes(trials: TrialResult[]): number[] {
   return trials.flatMap(trial => trial.timing.reactionLatencyMs === null ? [] : [trial.timing.reactionLatencyMs]);
 }
-export function summarize(trials: TrialResult[]): RunSummary {
+export function summarize(trials: TrialResult[], category: Category = 'visual-reaction'): RunSummary {
   const correct = trials.filter(trial => trial.outcome === 'success').length;
   const levels = [...new Set(trials.map(trial => trial.scenario.level))].sort();
-  return { total: trials.length, correct, completionRate: trials.length ? correct / trials.length : 0,
+  return { category, total: trials.length, correct, completionRate: trials.length ? correct / trials.length : 0,
     medianReactionLatencyMs: median(responseTimes(trials)),
     p95: { value: null, status: 'insufficient-samples' },
     failures: { premature: trials.filter(x => x.outcome === 'premature').length,
@@ -23,7 +24,7 @@ export function summarize(trials: TrialResult[]): RunSummary {
       const group = trials.filter(trial => trial.scenario.level === level);
       return { level: level as Level, total: group.length,
         correct: group.filter(x => x.outcome === 'success').length, medianReactionLatencyMs: median(responseTimes(group)),
-        objectsPerTrial: group[0]?.scenario.category === 'target-acquisition' ? group[0].scenario.objects.length : null };
+        objectsPerTrial: group[0] && group[0].scenario.category !== 'visual-reaction' ? group[0].scenario.objects.length : null };
     }),
   };
 }
@@ -35,9 +36,10 @@ const duration = (value: number | null): string => value === null ? 'Unavailable
 export function renderReport(report: RunReport): string {
   const control = report.comparisonClass === 'control-only';
   const targetAcquisition = report.category === 'target-acquisition';
-  const categoryTitle = targetAcquisition ? 'Target Acquisition' : 'Visual Reaction';
+  const categoryTitle = taskRegistry[report.category].title;
   const crowdingNote = targetAcquisition
     ? `One matching shape among static objects. Each object is ${report.environment.acquisitionObjectSizePx} CSS pixels in diameter; response limit is 10 seconds.`
+    : report.category === 'dynamic-tracking' ? `Click the moving star among distractors. Radius: ${report.environment.targetRadiusPx} CSS px; speed: ${report.environment.movementSpeedPxPerSecond} CSS px/s. Timing starts when the field appears.`
     : 'A single target changes from red to green, with response windows that shorten by level.';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ReactBench · ${categoryTitle} results</title><style>

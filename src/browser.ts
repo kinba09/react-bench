@@ -1,6 +1,6 @@
-import { createPlan, defaultConfig, defaultConfigFor, targetAcquisitionObjectsByLevel, taskRegistry } from './registry.js';
+import { createPlan, defaultConfig, defaultConfigFor, dynamicTrackingReferenceBandPx, targetAcquisitionObjectsByLevel, taskRegistry, validateConfig } from './registry.js';
 import { grade } from './grader.js';
-import type { BrowserEnvironment, BrowserEvent, Category, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
+import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#arena')!;
 const context = canvas.getContext('2d')!;
@@ -14,7 +14,6 @@ const referenceSymbol = document.querySelector<HTMLCanvasElement>('#reference-sy
 const responseWindowLabel = document.querySelector<HTMLElement>('#window-label')!;
 const categoryTitle = document.querySelector<HTMLElement>('#category-title')!;
 const categorySubtitle = document.querySelector<HTMLElement>('#category-subtitle')!;
-const targetAcquisitionReadyMs = 250;
 const controlled = new URLSearchParams(location.search).has('controlled');
 document.querySelector<HTMLElement>('#practice-controls')!.hidden = controlled;
 const access = new URLSearchParams(location.search).get('access');
@@ -24,11 +23,46 @@ let scenario: Scenario;
 let phase: SceneSnapshot['phase'] = 'prepared';
 let events: BrowserEvent[] = [];
 let target = { x: 0, y: 0, radius: 42 };
-let objects: SceneSnapshot['objects'] = [];
+let objects: AcquisitionObjectState[] = [];
+let activatedAtMs: number | null = null;
+let lastCountdownSecond: number | null = null;
 let referenceValue: SceneSnapshot['reference'] = null;
 let plannedActivation = 0;
 let deadline = 0;
 let animation = 0;
+
+function reflectedPosition(value: number, minimum: number, maximum: number): number {
+  const span = maximum - minimum;
+  if (span <= 0) return minimum;
+  const cycle = ((value - minimum) % (span * 2) + span * 2) % (span * 2);
+  return cycle <= span ? minimum + cycle : maximum - (cycle - span);
+}
+
+function movingTargetsAt(nowMs: number): MovingTargetState[] {
+  if (scenario.category !== 'dynamic-tracking') return [];
+  const rect = canvas.getBoundingClientRect();
+  const elapsedSeconds = Math.max(0, nowMs - (activatedAtMs ?? nowMs)) / 1000;
+  return scenario.objects.map(object => {
+    const localX = reflectedPosition(object.u * rect.width + object.velocityX * elapsedSeconds, object.radius, rect.width - object.radius);
+    const playableHeight = Math.max(0, rect.height - dynamicTrackingReferenceBandPx);
+    const localY = reflectedPosition(dynamicTrackingReferenceBandPx + object.v * playableHeight + object.velocityY * elapsedSeconds,
+      dynamicTrackingReferenceBandPx + object.radius, rect.height - object.radius);
+    return { id: object.id, role: object.role, x: rect.left + localX, y: rect.top + localY, radius: object.radius };
+  });
+}
+
+function drawStar(x: number, y: number, outerRadius: number, innerRadius: number): void {
+  context.beginPath();
+  for (let point = 0; point < 10; point++) {
+    const radius = point % 2 === 0 ? outerRadius : innerRadius;
+    const angle = -Math.PI / 2 + point * Math.PI / 5;
+    const px = x + Math.cos(angle) * radius;
+    const py = y + Math.sin(angle) * radius;
+    if (point === 0) context.moveTo(px, py); else context.lineTo(px, py);
+  }
+  context.closePath();
+  context.fill();
+}
 
 function drawSymbol(targetContext: CanvasRenderingContext2D, symbol: TargetSymbol, x: number, y: number, size: number): void {
   targetContext.save();
@@ -95,11 +129,14 @@ function paintReference(symbol: TargetSymbol): void {
   drawSymbol(referenceContext, symbol, 20, 20, 27);
 }
 
-function draw(): void {
+function draw(nowMs = performance.now()): void {
   const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.round(rect.width);
-  canvas.height = Math.round(rect.height);
-  context.clearRect(0, 0, canvas.width, canvas.height);
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = Math.round(rect.width * pixelRatio);
+  const height = Math.round(rect.height * pixelRatio);
+  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, rect.width, rect.height);
   if (scenario.category === 'visual-reaction') {
     target = { x: rect.left + rect.width * scenario.target.u,
       y: rect.top + rect.height * scenario.target.v, radius: scenario.target.radius };
@@ -116,12 +153,59 @@ function draw(): void {
     return;
   }
 
+  if (scenario.category === 'dynamic-tracking') {
+    context.fillStyle = '#f8fafc';
+    context.fillRect(0, 0, rect.width, rect.height);
+    context.fillStyle = '#ffffff';
+    context.strokeStyle = '#dce4ec';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.roundRect(14, 11, 188, 46, 9);
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#687483';
+    context.font = '600 10px system-ui, sans-serif';
+    context.textAlign = 'left';
+    context.fillText('REFERENCE', 25, 28);
+    context.fillStyle = '#293746';
+    context.font = '600 13px system-ui, sans-serif';
+    context.fillText('Find the star', 25, 47);
+    context.fillStyle = '#f2b544';
+  drawStar(177, 34, 14, 6.5);
+
+  if (phase === 'prepared' || phase === 'waiting') return;
+
+  const targets = movingTargetsAt(nowMs).sort((a, b) => Number(a.role === 'required') - Number(b.role === 'required'));
+  for (const object of targets) {
+    const x = object.x - rect.left;
+    const y = object.y - rect.top;
+    context.beginPath();
+    context.arc(x, y, object.radius, 0, Math.PI * 2);
+    context.fillStyle = '#e5edf5';
+    context.fill();
+    context.strokeStyle = '#55718c';
+    context.lineWidth = 2;
+    context.stroke();
+    if (object.id === scenario.requiredTargetId) {
+      context.fillStyle = '#e5a82e';
+      drawStar(x, y, 13, 6);
+    } else {
+      context.beginPath();
+      context.arc(x, y, 5, 0, Math.PI * 2);
+      context.fillStyle = '#647f98';
+      context.fill();
+    }
+  }
+    return;
+  }
+
   const radius = scenario.objectSizePx / 2;
   objects = scenario.objects.map(item => ({ id: item.id, x: rect.left + rect.width * item.u,
     y: rect.top + rect.height * item.v, radius, symbol: item.symbol, matching: item.matching }));
   const matching = objects.find(item => item.matching)!;
   target = { x: matching.x, y: matching.y, radius: matching.radius };
   referenceValue = scenario.reference;
+  if (phase === 'prepared' || phase === 'waiting') return;
   for (const item of objects) {
     const x = item.x - rect.left;
     const y = item.y - rect.top;
@@ -129,7 +213,7 @@ function draw(): void {
     context.arc(x, y, item.radius, 0, Math.PI * 2);
     context.fillStyle = phase === 'complete' ? '#f0f2f5' : '#ffffff';
     context.fill();
-    context.strokeStyle = phase === 'complete' ? '#aeb6c0' : '#aeb6c0';
+    context.strokeStyle = '#aeb6c0';
     context.lineWidth = 1.5;
     context.stroke();
     drawSymbol(context, item.symbol, x, y + 0.5, scenario.objectSizePx * 0.62);
@@ -151,10 +235,14 @@ function frame(): void {
   const now = performance.now();
   if (phase === 'waiting' && now >= plannedActivation) {
     phase = 'active';
-    deadline = now + scenario.responseWindowMs;
-    draw();
+    activatedAtMs = now;
+    deadline = now + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs);
+    draw(now);
     record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline });
-    if (scenario.category === 'target-acquisition') {
+    if (scenario.category === 'dynamic-tracking') {
+      status.textContent = 'Moving';
+      instruction.textContent = 'Click the star now. The objects keep moving.';
+    } else if (scenario.category === 'target-acquisition') {
       status.textContent = 'Find the match';
       instruction.textContent = 'Click the object that matches the reference symbol.';
     } else {
@@ -167,7 +255,16 @@ function frame(): void {
     result.textContent = 'No response';
     finish('Response window expired.');
   }
-  if (phase !== 'complete') animation = requestAnimationFrame(frame);
+  if (phase !== 'complete') {
+    if (scenario.category === 'dynamic-tracking') {
+      draw(now);
+      if (phase === 'active') {
+        const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+        if (remaining !== lastCountdownSecond) { status.textContent = `Moving · ${remaining} s`; lastCountdownSecond = remaining; }
+      }
+    }
+    animation = requestAnimationFrame(frame);
+  }
 }
 
 const environment: BrowserEnvironment = {
@@ -176,22 +273,24 @@ const environment: BrowserEnvironment = {
     scenario = next;
     phase = 'prepared';
     events = [];
+    activatedAtMs = null;
+    lastCountdownSecond = null;
     status.textContent = 'Ready';
     instruction.textContent = taskRegistry[scenario.category].instructions;
     document.querySelector<HTMLElement>('#rules')!.textContent = taskRegistry[scenario.category].instructions;
     progress.textContent = `Trial ${index} of ${total}`;
     levelLabel.textContent = `Level ${scenario.level}`;
-    responseWindowLabel.textContent = scenario.category === 'target-acquisition' ? 'Time limit' : 'Response window';
-    document.querySelector<HTMLElement>('#window')!.textContent = `${scenario.responseWindowMs / 1000} s`;
+    responseWindowLabel.textContent = scenario.category === 'target-acquisition' ? 'Time limit' : scenario.category === 'dynamic-tracking' ? 'Click window' : 'Response window';
+    document.querySelector<HTMLElement>('#window')!.textContent = `${(scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs) / 1000} s`;
     result.textContent = '—';
     const task = taskRegistry[scenario.category];
     categoryTitle.textContent = task.title;
     categorySubtitle.textContent = scenario.category === 'target-acquisition'
-      ? 'Match the reference symbol. Choose once.' : 'Wait for green. Make one precise click.';
+      ? 'Match the reference symbol. Choose once.' : scenario.category === 'dynamic-tracking' ? 'Track the star as it moves among distractors.' : 'Wait for green. Make one precise click.';
     document.title = `${task.title} · ReactBench`;
     canvas.classList.toggle('acquisition', scenario.category === 'target-acquisition');
     canvas.setAttribute('aria-label', scenario.category === 'target-acquisition'
-      ? 'Choose the symbol that matches the reference.' : 'Click the circular target only after it turns green.');
+      ? 'Choose the symbol that matches the reference.' : scenario.category === 'dynamic-tracking' ? 'Click the moving star shown in the reference.' : 'Click the circular target only after it turns green.');
     reference.hidden = scenario.category !== 'target-acquisition';
     if (scenario.category === 'target-acquisition') paintReference(scenario.reference.symbol);
     draw();
@@ -209,7 +308,7 @@ const environment: BrowserEnvironment = {
       instruction.textContent = 'Wait. The target will turn green.';
     } else {
       phase = 'waiting';
-      plannedActivation = now + targetAcquisitionReadyMs;
+      plannedActivation = now + scenario.initialDelayMs;
       record('started', now, { plannedActivationAtMs: plannedActivation });
       status.textContent = 'Get ready';
       instruction.textContent = 'The ten-second response window begins shortly.';
@@ -219,7 +318,15 @@ const environment: BrowserEnvironment = {
     animation = requestAnimationFrame(frame);
   },
   snapshot() {
-    return structuredClone({ trialId: scenario.id, phase, nowMs: performance.now(), target, objects, reference: referenceValue, events });
+    const nowMs = performance.now();
+    if (scenario.category === 'dynamic-tracking') {
+      const moving = movingTargetsAt(nowMs);
+      const requiredTargetId = scenario.requiredTargetId;
+      const required = moving.find(object => object.id === requiredTargetId)!;
+      return structuredClone({ trialId: scenario.id, phase, nowMs, target: { x: required.x, y: required.y, radius: required.radius },
+        objects: moving, requiredTargetId: scenario.requiredTargetId, reference: null, events });
+    }
+    return structuredClone({ trialId: scenario.id, phase, nowMs, target, objects, reference: referenceValue, events });
   },
 };
 window.reactBenchEnvironment = environment;
@@ -232,6 +339,18 @@ document.addEventListener('click', event => {
     finish('Response window expired.');
     return;
   }
+  if (scenario.category === 'dynamic-tracking') {
+    const objects = movingTargetsAt(now);
+    const clicked = objects.find(object => Math.hypot(event.clientX - object.x, event.clientY - object.y) <= object.radius);
+    const hit = clicked?.id === scenario.requiredTargetId;
+    record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted,
+      objects, requiredTargetId: scenario.requiredTargetId, clickedObjectId: clicked?.id ?? null });
+    const { outcome, reactionLatencyMs } = grade(events);
+    result.textContent = reactionLatencyMs === null ? outcome : `${Math.round(reactionLatencyMs)} ms`;
+    finish(outcome === 'success' ? 'Required target hit.' : outcome === 'premature' ? 'Too soon. Wait for the moving field.' : 'Incorrect click. This trial is complete.');
+    return;
+  }
+
   const objectIndex = scenario.category === 'target-acquisition'
     ? objects.findIndex(item => Math.hypot(event.clientX - item.x, event.clientY - item.y) <= item.radius)
     : -1;
@@ -250,14 +369,17 @@ let practiceIndex = 0;
 const practiceCategory = document.querySelector<HTMLSelectElement>('#practice-category')!;
 const practiceLevel = document.querySelector<HTMLSelectElement>('#practice-level')!;
 function updatePracticeLevels(): void {
-  const acquisition = practiceCategory.value === 'target-acquisition';
-  for (const [index, option] of Array.from(practiceLevel.options).entries()) {
-    const level = index + 1;
-    const seconds = defaultConfig.responseWindowsMs[index]! / 1000;
-    option.textContent = acquisition
-      ? `Level ${level} · ${targetAcquisitionObjectsByLevel[index]} objects`
+  const category = practiceCategory.value as Category;
+  const levels = defaultConfigFor(category).levels;
+  practiceLevel.replaceChildren(...levels.map(level => {
+    const option = document.createElement('option');
+    option.value = String(level);
+    const seconds = defaultConfig.responseWindowsMs[level - 1]! / 1000;
+    option.textContent = category === 'target-acquisition' ? `Level ${level} · ${targetAcquisitionObjectsByLevel[level - 1]} objects`
+      : category === 'dynamic-tracking' ? `Level ${level} · ${[1, 5, 15][level - 1]} moving ${level === 1 ? 'object' : 'objects'}`
       : `Level ${level} · ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
-  }
+    return option;
+  }));
 }
 practiceCategory.addEventListener('change', updatePracticeLevels);
 updatePracticeLevels();
@@ -265,7 +387,7 @@ document.querySelector<HTMLFormElement>('#practice-controls')!.addEventListener(
 document.querySelector<HTMLButtonElement>('#start')!.addEventListener('click', () => {
   const level = Number(practiceLevel.value) as 1 | 2 | 3 | 4 | 5;
   const category = practiceCategory.value as Category;
-  const plan = createPlan({ ...defaultConfigFor(category), levels: [level], trialsPerLevel: 1, seed: `practice-${practiceIndex++}` });
+  const plan = createPlan(validateConfig({ ...defaultConfigFor(category), levels: [level], trialsPerLevel: 1, seed: `practice-${practiceIndex++}` }));
   environment.prepare(plan[0]!, 1, 1);
   environment.start();
 });

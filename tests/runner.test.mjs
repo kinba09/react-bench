@@ -26,6 +26,7 @@ test('runs the real five-level Visual Reaction profile through browser input and
       assert.ok(trial.scenario.initialDelayMs >= 1000 && trial.scenario.initialDelayMs <= 4000);
       assert.equal(trial.scenario.responseWindowMs, [5000, 4000, 3000, 2000, 1000][trial.scenario.level - 1]);
       assert.ok(trial.timing.reactionLatencyMs >= 0);
+      assert.equal(trial.timing.measurement, 'software-activation-to-input-handler');
       assert.equal(trial.timing.modelProcessingMs, null);
       assert.ok(trial.timing.preparationMs >= 0);
       assert.ok(trial.observations.length >= 2);

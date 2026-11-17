@@ -9,6 +9,37 @@ import { OracleAdapter } from '../dist/adapters/oracle.js';
 import { createPlan, targetAcquisitionConfig } from '../dist/registry.js';
 import { startServer } from '../dist/server.js';
 
+test('shows only the reference before the seeded acquisition activation', { timeout: 10_000 }, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(server.url);
+    await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
+    const scenario = createPlan({ ...targetAcquisitionConfig, levels: [5], trialsPerLevel: 1, initialDelayMs: [400, 400] })[0];
+    await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
+    const alpha = () => page.evaluate(() => {
+      const target = window.reactBenchEnvironment.snapshot().target;
+      const canvas = document.querySelector('#arena');
+      const rect = canvas.getBoundingClientRect();
+      return canvas.getContext('2d').getImageData(target.x - rect.left, target.y - rect.top, 1, 1).data[3];
+    });
+    assert.equal(await page.locator('#reference').isVisible(), true);
+    assert.equal(await alpha(), 0);
+    await page.evaluate(() => window.reactBenchEnvironment.start());
+    assert.equal(await page.evaluate(() => window.reactBenchEnvironment.snapshot().phase), 'waiting');
+    assert.equal(await alpha(), 0);
+    await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'active');
+    const events = await page.evaluate(() => window.reactBenchEnvironment.snapshot().events);
+    const started = events.find(event => event.type === 'started');
+    const active = events.find(event => event.type === 'activated');
+    assert.equal(started.plannedActivationAtMs - started.atMs, 400);
+    assert.ok(active.atMs >= started.plannedActivationAtMs);
+    assert.equal(active.deadlineAtMs - active.atMs, 10_000);
+    assert.equal(await alpha(), 255);
+  } finally { await browser.close(); await server.close(); }
+});
+
 test('runs Target Acquisition through Chromium and exports crowding and successful hit evidence', { timeout: 120_000 }, async () => {
   const output = await mkdtemp(join(tmpdir(), 'reactbench-target-'));
   try {
@@ -22,9 +53,11 @@ test('runs Target Acquisition through Chromium and exports crowding and successf
     assert.equal(report.summary.correct, 15);
     assert.equal(report.comparisonClass, 'control-only');
     assert.equal(report.environment.acquisitionObjectSizePx, 26);
+    assert.equal(report.environment.targetRadiusPx, 13);
     for (const trial of report.trials) {
       assert.equal(trial.scenario.category, 'target-acquisition');
       assert.equal(trial.scenario.responseWindowMs, 10_000);
+      assert.ok(trial.scenario.initialDelayMs >= 1000 && trial.scenario.initialDelayMs <= 4000);
       assert.equal(trial.scenario.objectSizePx, 26);
       assert.equal(trial.scenario.objects.length, [6, 16, 36, 64, 100][trial.scenario.level - 1]);
       assert.equal(trial.scenario.objects.filter(item => item.matching).length, 1);
@@ -144,7 +177,7 @@ test('practice level labels follow the selected game', { timeout: 15_000 }, asyn
   }
 });
 
-test('a correct click after expiration cannot rescue an expired board', { timeout: 15_000 }, async () => {
+test('a correct click after expiration cannot rescue an expired board', { timeout: 20_000 }, async () => {
   const server = await startServer();
   const browser = await chromium.launch();
   try {
@@ -153,7 +186,7 @@ test('a correct click after expiration cannot rescue an expired board', { timeou
     await page.selectOption('#practice-category', 'target-acquisition');
     await page.click('#start');
     const active = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
-    await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined, { timeout: 12_000 });
+    await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined, { timeout: 16_000 });
     await page.mouse.click(active.target.x, active.target.y);
     const finished = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
     assert.equal(finished.phase, 'complete');
