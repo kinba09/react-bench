@@ -7,7 +7,7 @@ export const defaultConfig: VisualReactionConfig = {
 };
 export const defaultDynamicTrackingConfig: DynamicTrackingConfig = {
   category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3],
-  trialsPerLevel: 3, screenshotsPerSecond: 2, clickWindowMs: 10_000,
+  trialsPerLevel: 3, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [1000, 4000],
 };
 export const dynamicTrackingTargetRadiusPx = 24;
 export const dynamicTrackingSpeedPxPerSecond = 150;
@@ -51,12 +51,12 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   if (!Array.isArray(levels) || !levels.length || levels.some(x => !Number.isInteger(x) || x < 1 || x > maxLevel) || new Set(levels).size !== levels.length) throw new Error(`levels must contain unique integers from 1 to ${maxLevel}.`);
   if (!Number.isInteger(config.trialsPerLevel) || Number(config.trialsPerLevel) < 1 || Number(config.trialsPerLevel) > 1000) throw new Error('trialsPerLevel must be an integer from 1 to 1000.');
   if (typeof config.screenshotsPerSecond !== 'number' || !Number.isFinite(config.screenshotsPerSecond) || config.screenshotsPerSecond < 0.1 || config.screenshotsPerSecond > 30) throw new Error('screenshotsPerSecond must be between 0.1 and 30.');
+  const delay = config.initialDelayMs ?? (category === 'dynamic-tracking' ? defaultConfig.initialDelayMs : undefined);
+  if (!Array.isArray(delay) || delay.length !== 2 || delay.some(x => !Number.isFinite(x) || x < 100 || x > 60_000) || delay[0] > delay[1]) throw new Error('initialDelayMs must be an ordered pair between 100 and 60000 milliseconds.');
   if (category === 'dynamic-tracking') {
     if (!Number.isFinite(config.clickWindowMs) || Number(config.clickWindowMs) < 100 || Number(config.clickWindowMs) > 60_000) throw new Error('clickWindowMs must be between 100 and 60000 milliseconds.');
-    return structuredClone(input) as DynamicTrackingConfig;
+    return { ...structuredClone(input), initialDelayMs: [...delay] } as DynamicTrackingConfig;
   }
-  const delay = config.initialDelayMs;
-  if (!Array.isArray(delay) || delay.length !== 2 || delay.some(x => !Number.isFinite(x) || x < 100 || x > 60_000) || delay[0] > delay[1]) throw new Error('initialDelayMs must be an ordered pair between 100 and 60000 milliseconds.');
   const windows = config.responseWindowsMs;
   if (!Array.isArray(windows) || windows.length !== 5 || windows.some(x => !Number.isFinite(x) || x < 100 || x > 60_000)) throw new Error('responseWindowsMs must contain five durations between 100 and 60000 milliseconds.');
   return structuredClone(input) as BenchmarkConfig;
@@ -94,7 +94,9 @@ export function createPlan(input: BenchmarkConfig): Scenario[] {
         const seed = `${config.seed}/dynamic-tracking/${level}/${repetition}`;
         const objectCount = dynamicTrackingObjectCounts[level];
         trials.push({ id: `dynamic-tracking-l${level}-t${repetition}`, category: 'dynamic-tracking', seed,
-          level, repetition, clickWindowMs: config.clickWindowMs, requiredTargetId: 'required-star',
+          level, repetition, clickWindowMs: config.clickWindowMs,
+          initialDelayMs: Math.round((config.initialDelayMs ?? defaultConfig.initialDelayMs)[0] + randomFrom(`${seed}/delay`)() * ((config.initialDelayMs ?? defaultConfig.initialDelayMs)[1] - (config.initialDelayMs ?? defaultConfig.initialDelayMs)[0])),
+          requiredTargetId: 'required-star',
           objects: createMovingObjects(seed, objectCount) });
       }
     }

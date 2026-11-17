@@ -15,6 +15,7 @@ export interface VisualReactionConfig extends CommonBenchmarkConfig {
 }
 export interface DynamicTrackingConfig extends CommonBenchmarkConfig {
   category: 'dynamic-tracking';
+  initialDelayMs?: [number, number];
   levels: DynamicTrackingLevel[];
   clickWindowMs: number;
 }
@@ -45,6 +46,7 @@ export interface DynamicTrackingScenario {
   level: DynamicTrackingLevel;
   repetition: number;
   clickWindowMs: number;
+  initialDelayMs: number;
   requiredTargetId: string;
   objects: MovingObject[];
 }

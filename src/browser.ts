@@ -18,7 +18,7 @@ let scenario: Scenario;
 let phase: SceneSnapshot['phase'] = 'prepared';
 let events: BrowserEvent[] = [];
 let target = { x: 0, y: 0, radius: 42 };
-let startedAtMs: number | null = null;
+let activatedAtMs: number | null = null;
 let deadline = 0;
 let animation = 0;
 let lastCountdownSecond: number | null = null;
@@ -33,7 +33,7 @@ function reflectedPosition(value: number, minimum: number, maximum: number): num
 function movingTargetsAt(nowMs: number): MovingTargetState[] {
   if (scenario.category !== 'dynamic-tracking') return [];
   const rect = canvas.getBoundingClientRect();
-  const elapsedSeconds = Math.max(0, nowMs - (startedAtMs ?? nowMs)) / 1000;
+  const elapsedSeconds = Math.max(0, nowMs - (activatedAtMs ?? nowMs)) / 1000;
   return scenario.objects.map(object => {
     const localX = reflectedPosition(object.u * rect.width + object.velocityX * elapsedSeconds, object.radius, rect.width - object.radius);
     const playableHeight = Math.max(0, rect.height - dynamicTrackingReferenceBandPx);
@@ -101,6 +101,8 @@ function draw(nowMs = performance.now()): void {
   context.fillStyle = '#f2b544';
   drawStar(177, 34, 14, 6.5);
 
+  if (phase === 'prepared' || phase === 'waiting') return;
+
   const targets = movingTargetsAt(nowMs).sort((a, b) => Number(a.role === 'required') - Number(b.role === 'required'));
   for (const object of targets) {
     const x = object.x - rect.left;
@@ -137,17 +139,16 @@ function finish(message: string): void {
 }
 function frame(): void {
   const now = performance.now();
-  if (scenario.category === 'dynamic-tracking' && phase === 'active' && now >= deadline) {
-    record('expired', now, { deadlineAtMs: deadline });
-    result.textContent = 'No response';
-    finish('Click window expired.');
-  } else if (scenario.category === 'visual-reaction' && phase === 'waiting' && now >= scenarioStartAtMs()) {
+  if (phase === 'waiting' && now >= plannedActivation) {
     phase = 'active';
-    deadline = now + scenario.responseWindowMs;
-    record('activated', now, { plannedActivationAtMs: scenarioStartAtMs(), deadlineAtMs: deadline });
-    status.textContent = 'Green';
-    instruction.textContent = 'Click the target now.';
-  } else if (scenario.category === 'visual-reaction' && phase === 'active' && now >= deadline) {
+    activatedAtMs = now;
+    deadline = now + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs);
+    draw(now);
+    record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline });
+    status.textContent = scenario.category === 'dynamic-tracking' ? 'Moving' : 'Green';
+    instruction.textContent = scenario.category === 'dynamic-tracking' ? 'Click the star now. The objects keep moving.' : 'Click the target now.';
+  }
+  if (phase === 'active' && now >= deadline) {
     record('expired', now, { deadlineAtMs: deadline });
     result.textContent = 'No response';
     finish('Response window expired.');
@@ -166,7 +167,6 @@ function frame(): void {
 }
 
 let plannedActivation = 0;
-function scenarioStartAtMs(): number { return plannedActivation; }
 
 const environment: BrowserEnvironment = {
   prepare(next, index, total) {
@@ -174,7 +174,7 @@ const environment: BrowserEnvironment = {
     scenario = next;
     phase = 'prepared';
     events = [];
-    startedAtMs = null;
+    activatedAtMs = null;
     lastCountdownSecond = null;
     status.textContent = 'Ready';
     progress.textContent = `Trial ${index} of ${total}`;
@@ -201,15 +201,13 @@ const environment: BrowserEnvironment = {
   start() {
     if (phase !== 'prepared') throw new Error('Prepare a trial before starting it.');
     const now = performance.now();
-    phase = scenario.category === 'dynamic-tracking' ? 'active' : 'waiting';
-    startedAtMs = now;
-    plannedActivation = now + (scenario.category === 'visual-reaction' ? scenario.initialDelayMs : 0);
-    deadline = scenario.category === 'dynamic-tracking' ? now + scenario.clickWindowMs : 0;
-    record('started', now, { plannedActivationAtMs: plannedActivation,
-      ...(scenario.category === 'dynamic-tracking' ? { deadlineAtMs: deadline } : {}) });
-    status.textContent = scenario.category === 'dynamic-tracking' ? 'Moving' : 'Red';
+    phase = 'waiting';
+    plannedActivation = now + scenario.initialDelayMs;
+    deadline = 0;
+    record('started', now, { plannedActivationAtMs: plannedActivation });
+    status.textContent = scenario.category === 'dynamic-tracking' ? 'Get ready' : 'Red';
     instruction.textContent = scenario.category === 'dynamic-tracking'
-      ? 'Click the star now. The objects keep moving.' : 'Wait. The target will turn green.';
+      ? 'Wait. The moving field will appear shortly.' : 'Wait. The target will turn green.';
     document.querySelector<HTMLButtonElement>('#start')!.disabled = true;
     animation = requestAnimationFrame(frame);
   },
@@ -231,7 +229,7 @@ window.reactBenchEnvironment = environment;
 document.addEventListener('click', event => {
   if ((event.target as Element).closest('[data-control]') || (phase !== 'waiting' && phase !== 'active')) return;
   const now = performance.now();
-  if (scenario.category === 'dynamic-tracking' && now >= deadline) {
+  if (phase === 'active' && now >= deadline) {
     record('expired', now, { deadlineAtMs: deadline });
     result.textContent = 'No response';
     finish('Click window expired.');
@@ -244,15 +242,15 @@ document.addEventListener('click', event => {
     const hit = clicked?.id === scenario.requiredTargetId;
     record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted,
       objects, requiredTargetId: scenario.requiredTargetId, clickedObjectId: clicked?.id ?? null });
-    const { outcome, reactionLatencyMs } = grade(events, scenario.category);
+    const { outcome, reactionLatencyMs } = grade(events);
     result.textContent = reactionLatencyMs === null ? outcome : `${Math.round(reactionLatencyMs)} ms`;
-    finish(outcome === 'success' ? 'Required target hit.' : 'Incorrect click. This trial is complete.');
+    finish(outcome === 'success' ? 'Required target hit.' : outcome === 'premature' ? 'Too soon. Wait for the moving field.' : 'Incorrect click. This trial is complete.');
     return;
   }
 
   const hit = Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
   record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted });
-  const { outcome, reactionLatencyMs } = grade(events, scenario.category);
+  const { outcome, reactionLatencyMs } = grade(events);
   result.textContent = reactionLatencyMs === null ? outcome : `${Math.round(reactionLatencyMs)} ms`;
   finish({ success: 'Target hit. Trial complete.', premature: 'Too soon. Wait for green.',
     wrong: 'Incorrect click. Aim for the target.', expired: 'Response window expired.' }[outcome]);

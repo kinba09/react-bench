@@ -76,7 +76,7 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     try {
       await Promise.race([
         page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined,
-          { timeout: scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs + 10_000
+          { timeout: scenario.category === 'dynamic-tracking' ? scenario.initialDelayMs + scenario.clickWindowMs + 10_000
             : scenario.initialDelayMs + scenario.responseWindowMs + 10_000 }),
         failure, observations.failure,
       ]);
@@ -90,12 +90,12 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     const last = observations.records.at(-1);
     const measuredCaptureHz = first && last && first !== last
       ? (observations.records.length - 1) * 1000 / (last.requestedAtMs - first.requestedAtMs) : null;
-    const graded = grade(snapshot.events, scenario.category);
+    const graded = grade(snapshot.events);
     return { id: scenario.id, scenario, outcome: graded.outcome, events: snapshot.events,
       actions, observations: observations.records,
       timing: { preparationMs, reactionLatencyMs: graded.reactionLatencyMs, modelProcessingMs: null,
         measuredCaptureHz, browserTimeOriginMs, runnerClock: 'runner-performance', reactionClock: 'browser-performance',
-        measurement: scenario.category === 'dynamic-tracking' ? 'trial-start-to-input-handler' : 'software-activation-to-input-handler' },
+        measurement: 'software-activation-to-input-handler' },
     };
   } finally {
     controller.abort();

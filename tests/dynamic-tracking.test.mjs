@@ -7,6 +7,75 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createPlan, dynamicTrackingObjectCounts, dynamicTrackingSpeedPxPerSecond, dynamicTrackingTargetRadiusPx } from '../dist/registry.js';
 import { runBenchmark } from '../dist/runner.js';
 import { OracleAdapter } from '../dist/adapters/oracle.js';
+import { chromium } from 'playwright';
+import { startServer } from '../dist/server.js';
+
+test('hides moving targets until the seeded wait completes', { timeout: 10_000 }, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(server.url);
+    await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
+    const scenario = createPlan({ category: 'dynamic-tracking', seed: 'hidden-preview', levels: [1],
+      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 1000, initialDelayMs: [400, 400] })[0];
+    await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
+    const pixel = () => page.evaluate(() => {
+      const scene = window.reactBenchEnvironment.snapshot();
+      const canvas = document.querySelector('#arena');
+      const rect = canvas.getBoundingClientRect();
+      return [...canvas.getContext('2d').getImageData(scene.target.x - rect.left, scene.target.y - rect.top, 1, 1).data];
+    });
+    assert.deepEqual(await pixel(), [248, 250, 252, 255]);
+    await page.evaluate(() => window.reactBenchEnvironment.start());
+    assert.equal(await page.evaluate(() => window.reactBenchEnvironment.snapshot().phase), 'waiting');
+    assert.deepEqual(await pixel(), [248, 250, 252, 255]);
+    await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'active');
+    const events = await page.evaluate(() => window.reactBenchEnvironment.snapshot().events);
+    const started = events.find(event => event.type === 'started');
+    const active = events.find(event => event.type === 'activated');
+    assert.equal(started.plannedActivationAtMs - started.atMs, 400);
+    assert.ok(active.atMs >= started.plannedActivationAtMs);
+    assert.equal(active.deadlineAtMs - active.atMs, 1000);
+    assert.notDeepEqual(await pixel(), [248, 250, 252, 255]);
+  } finally { await browser.close(); await server.close(); }
+});
+
+test('replays a seeded trajectory through real Chromium at matched elapsed motion times', { timeout: 15_000 }, async () => {
+  let config;
+  for (let index = 0; index < 300; index++) {
+    const candidate = { category: 'dynamic-tracking', seed: `motion-replay-${index}`, levels: [1],
+      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 1000, initialDelayMs: [100, 200] };
+    const object = createPlan(candidate)[0].objects[0];
+    if (object.u > 0.4 && object.u < 0.6 && object.v > 0.4 && object.v < 0.6) { config = candidate; break; }
+  }
+  assert.ok(config);
+  const samples = [];
+  class SampleMotion extends OracleAdapter {
+    metadata = { name: 'motion-replay-fixture', model: null, access: 'privileged-oracle' };
+    async prepare(context) { this.initial = await context.oracle.snapshot(); }
+    async run(context) {
+      await this.waitForActive(context);
+      await sleep(120);
+      samples.push({ initial: this.initial, moving: await context.oracle.snapshot() });
+    }
+  }
+  const first = await runBenchmark({ config, adapterFactory: () => new SampleMotion() });
+  const second = await runBenchmark({ config, adapterFactory: () => new SampleMotion() });
+  assert.deepEqual(first.trials[0].scenario, second.trials[0].scenario);
+  const velocity = first.trials[0].scenario.objects[0];
+  const normalized = samples.map(({ initial, moving }) => {
+    const activation = moving.events.find(event => event.type === 'activated');
+    const elapsed = (moving.nowMs - activation.atMs) / 1000;
+    assert.ok(elapsed >= 0.12 && elapsed < 0.5, 'sample the middle-of-field segment before a boundary bounce');
+    assert.ok(Math.abs(moving.target.x - initial.target.x - velocity.velocityX * elapsed) < 1e-6);
+    assert.ok(Math.abs(moving.target.y - initial.target.y - velocity.velocityY * elapsed) < 1e-6);
+    return { x: moving.target.x - velocity.velocityX * (elapsed - 0.12),
+      y: moving.target.y - velocity.velocityY * (elapsed - 0.12) };
+  });
+  assert.ok(Math.abs(normalized[0].x - normalized[1].x) < 1e-6);
+  assert.ok(Math.abs(normalized[0].y - normalized[1].y) < 1e-6);
+});
 
 test('plans three seeded trials at each visible Dynamic Tracking level with constant motion settings', async () => {
   const config = JSON.parse(await readFile(new URL('../configs/dynamic-tracking.json', import.meta.url), 'utf8'));
@@ -20,6 +89,7 @@ test('plans three seeded trials at each visible Dynamic Tracking level with cons
     for (const trial of trials) {
       assert.equal(trial.category, 'dynamic-tracking');
       assert.equal(trial.clickWindowMs, 10_000);
+      assert.ok(trial.initialDelayMs >= 1000 && trial.initialDelayMs <= 4000);
       assert.equal(trial.objects.length, dynamicTrackingObjectCounts[level]);
       assert.equal(trial.objects.filter(object => object.role === 'required').length, 1);
       assert.equal(trial.objects.filter(object => object.role === 'distractor').length, dynamicTrackingObjectCounts[level] - 1);
@@ -33,7 +103,7 @@ test('plans three seeded trials at each visible Dynamic Tracking level with cons
 });
 
 const quickConfig = { category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3],
-  trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 650 };
+  trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 650, initialDelayMs: [100, 200] };
 
 test('runs all visible levels through the common oracle, logs, and category summary', { timeout: 20_000 }, async () => {
   const output = await mkdtemp(join(tmpdir(), 'reactbench-dynamic-'));
@@ -49,14 +119,14 @@ test('runs all visible levels through the common oracle, logs, and category summ
     assert.equal(report.environment.targetRadiusPx, dynamicTrackingTargetRadiusPx);
     assert.equal(report.environment.movementSpeedPxPerSecond, dynamicTrackingSpeedPxPerSecond);
     for (const trial of report.trials) {
-      const start = trial.events.find(event => event.type === 'started');
+      const start = trial.events.find(event => event.type === 'activated');
       const click = trial.events.find(event => event.type === 'action-registered');
       assert.equal(click.clock, start.clock);
       assert.equal(click.requiredTargetId, trial.scenario.requiredTargetId);
       assert.equal(click.clickedObjectId, trial.scenario.requiredTargetId);
       assert.equal(click.objects.length, trial.scenario.objects.length);
       assert.equal(trial.actions.length, 1);
-      assert.equal(trial.timing.measurement, 'trial-start-to-input-handler');
+      assert.equal(trial.timing.measurement, 'software-activation-to-input-handler');
       assert.equal(trial.timing.reactionLatencyMs, click.atMs - start.atMs);
     }
     assert.deepEqual(report.summary.byLevel.map(row => [row.level, row.total, row.correct]), [[1, 1, 1], [2, 1, 1], [3, 1, 1]]);
