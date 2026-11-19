@@ -1,4 +1,4 @@
-import { createPlan, defaultConfig, defaultConfigFor, dynamicTrackingReferenceBandPx, targetAcquisitionObjectsByLevel, taskRegistry, validateConfig } from './registry.js';
+import { createPlan, defaultConfig, defaultConfigFor, dynamicTrackingObjectCounts, dynamicTrackingReferenceBandPx, targetAcquisitionObjectsByLevel, taskRegistry, validateConfig } from './registry.js';
 import { grade } from './grader.js';
 import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
 
@@ -12,6 +12,7 @@ const result = document.querySelector<HTMLElement>('#result')!;
 const reference = document.querySelector<HTMLElement>('#reference')!;
 const referenceSymbol = document.querySelector<HTMLCanvasElement>('#reference-symbol')!;
 const responseWindowLabel = document.querySelector<HTMLElement>('#window-label')!;
+const phaseCountdown = document.querySelector<HTMLElement>('#phase-countdown')!;
 const categoryTitle = document.querySelector<HTMLElement>('#category-title')!;
 const categorySubtitle = document.querySelector<HTMLElement>('#category-subtitle')!;
 const controlled = new URLSearchParams(location.search).has('controlled');
@@ -24,12 +25,15 @@ let phase: SceneSnapshot['phase'] = 'prepared';
 let events: BrowserEvent[] = [];
 let target = { x: 0, y: 0, radius: 42 };
 let objects: AcquisitionObjectState[] = [];
-let activatedAtMs: number | null = null;
+let motionStartedAtMs: number | null = null;
 let lastCountdownSecond: number | null = null;
 let referenceValue: SceneSnapshot['reference'] = null;
 let plannedActivation = 0;
+let watchDeadline = 0;
+let hiddenDeadline = 0;
 let deadline = 0;
 let animation = 0;
+let keepTargetsHiddenAfterFinish = false;
 
 function reflectedPosition(value: number, minimum: number, maximum: number): number {
   const span = maximum - minimum;
@@ -41,7 +45,7 @@ function reflectedPosition(value: number, minimum: number, maximum: number): num
 function movingTargetsAt(nowMs: number): MovingTargetState[] {
   if (scenario.category !== 'dynamic-tracking') return [];
   const rect = canvas.getBoundingClientRect();
-  const elapsedSeconds = Math.max(0, nowMs - (activatedAtMs ?? nowMs)) / 1000;
+  const elapsedSeconds = Math.max(0, nowMs - (motionStartedAtMs ?? nowMs)) / 1000;
   return scenario.objects.map(object => {
     const localX = reflectedPosition(object.u * rect.width + object.velocityX * elapsedSeconds, object.radius, rect.width - object.radius);
     const playableHeight = Math.max(0, rect.height - dynamicTrackingReferenceBandPx);
@@ -173,7 +177,7 @@ function draw(nowMs = performance.now()): void {
     context.fillStyle = '#f2b544';
   drawStar(177, 34, 14, 6.5);
 
-  if (phase === 'prepared' || phase === 'waiting') return;
+  if (phase === 'prepared' || phase === 'waiting' || phase === 'hidden' || (phase === 'complete' && keepTargetsHiddenAfterFinish)) return;
 
   const targets = movingTargetsAt(nowMs).sort((a, b) => Number(a.role === 'required') - Number(b.role === 'required'));
   for (const object of targets) {
@@ -224,18 +228,37 @@ function record(type: BrowserEvent['type'], atMs: number, extra: Partial<Browser
   events.push({ trialId: scenario.id, type, atMs, clock: 'browser-performance', phase, ...extra });
 }
 function finish(message: string): void {
+  keepTargetsHiddenAfterFinish = phase === 'hidden';
   phase = 'complete';
   cancelAnimationFrame(animation);
   status.textContent = 'Complete';
+  phaseCountdown.hidden = true;
   instruction.textContent = message;
   draw();
   document.querySelector<HTMLButtonElement>('#start')!.disabled = false;
 }
 function frame(): void {
   const now = performance.now();
-  if (phase === 'waiting' && now >= plannedActivation) {
+  if (scenario.category === 'dynamic-tracking' && phase === 'watching' && now >= watchDeadline) {
+    phase = 'hidden';
+    hiddenDeadline = now + scenario.hiddenDurationMs;
+    lastCountdownSecond = null;
+    record('phase-transition', now, { phaseDeadlineAtMs: hiddenDeadline });
+    status.textContent = 'Hidden';
+    instruction.textContent = 'The moving field is hidden. Hold the star’s last position in mind.';
+  }
+  if (scenario.category === 'dynamic-tracking' && phase === 'hidden' && now >= hiddenDeadline) {
     phase = 'active';
-    activatedAtMs = now;
+    deadline = now + scenario.clickWindowMs;
+    lastCountdownSecond = null;
+    phaseCountdown.hidden = true;
+    record('phase-transition', now, { phaseDeadlineAtMs: deadline });
+    record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline });
+    status.textContent = 'Click';
+    instruction.textContent = 'Click the star now. The objects keep moving.';
+  } else if (phase === 'waiting' && now >= plannedActivation) {
+    phase = 'active';
+    if (scenario.category === 'dynamic-tracking') motionStartedAtMs = now;
     deadline = now + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs);
     draw(now);
     record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline });
@@ -258,9 +281,21 @@ function frame(): void {
   if (phase !== 'complete') {
     if (scenario.category === 'dynamic-tracking') {
       draw(now);
-      if (phase === 'active') {
+      if (phase === 'hidden') {
+        const remaining = Math.max(0, Math.ceil((hiddenDeadline - now) / 1000));
+        if (remaining !== lastCountdownSecond) {
+          status.textContent = `Hidden · ${remaining} s`;
+          phaseCountdown.textContent = `Reappears in ${remaining} s`;
+          phaseCountdown.hidden = false;
+          lastCountdownSecond = remaining;
+        }
+      } else if (phase === 'active') {
+        phaseCountdown.hidden = true;
         const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
-        if (remaining !== lastCountdownSecond) { status.textContent = `Moving · ${remaining} s`; lastCountdownSecond = remaining; }
+        if (remaining !== lastCountdownSecond) {
+          status.textContent = `${scenario.level >= 4 ? 'Click' : 'Moving'} · ${remaining} s`;
+          lastCountdownSecond = remaining;
+        }
       }
     }
     animation = requestAnimationFrame(frame);
@@ -273,8 +308,12 @@ const environment: BrowserEnvironment = {
     scenario = next;
     phase = 'prepared';
     events = [];
-    activatedAtMs = null;
+    motionStartedAtMs = null;
     lastCountdownSecond = null;
+    watchDeadline = 0;
+    hiddenDeadline = 0;
+    keepTargetsHiddenAfterFinish = false;
+    phaseCountdown.hidden = true;
     status.textContent = 'Ready';
     instruction.textContent = taskRegistry[scenario.category].instructions;
     document.querySelector<HTMLElement>('#rules')!.textContent = taskRegistry[scenario.category].instructions;
@@ -306,6 +345,15 @@ const environment: BrowserEnvironment = {
       record('started', now, { plannedActivationAtMs: plannedActivation });
       status.textContent = 'Red';
       instruction.textContent = 'Wait. The target will turn green.';
+    } else if (scenario.category === 'dynamic-tracking' && scenario.level >= 4) {
+      phase = 'watching';
+      motionStartedAtMs = now;
+      watchDeadline = now + scenario.watchDurationMs;
+      hiddenDeadline = watchDeadline + scenario.hiddenDurationMs;
+      plannedActivation = hiddenDeadline;
+      record('started', now, { plannedActivationAtMs: plannedActivation, phaseDeadlineAtMs: watchDeadline });
+      status.textContent = 'Watch';
+      instruction.textContent = 'Watch the star as it moves. The field will disappear briefly.';
     } else {
       phase = 'waiting';
       plannedActivation = now + scenario.initialDelayMs;
@@ -331,7 +379,9 @@ const environment: BrowserEnvironment = {
 };
 window.reactBenchEnvironment = environment;
 document.addEventListener('click', event => {
-  if ((event.target as Element).closest('[data-control]') || (phase !== 'waiting' && phase !== 'active')) return;
+  const prematureDynamicPhase = scenario.category === 'dynamic-tracking'
+    && (phase === 'waiting' || phase === 'watching' || phase === 'hidden');
+  if ((event.target as Element).closest('[data-control]') || (phase !== 'waiting' && phase !== 'watching' && phase !== 'hidden' && phase !== 'active')) return;
   const now = performance.now();
   if (phase === 'active' && now >= deadline) {
     record('expired', now, { deadlineAtMs: deadline });
@@ -340,8 +390,9 @@ document.addEventListener('click', event => {
     return;
   }
   if (scenario.category === 'dynamic-tracking') {
-    const objects = movingTargetsAt(now);
-    const clicked = objects.find(object => Math.hypot(event.clientX - object.x, event.clientY - object.y) <= object.radius);
+    const objects = prematureDynamicPhase ? [] : movingTargetsAt(now);
+    const clicked = prematureDynamicPhase ? undefined
+      : objects.find(object => Math.hypot(event.clientX - object.x, event.clientY - object.y) <= object.radius);
     const hit = clicked?.id === scenario.requiredTargetId;
     record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted,
       objects, requiredTargetId: scenario.requiredTargetId, clickedObjectId: clicked?.id ?? null });
@@ -376,7 +427,7 @@ function updatePracticeLevels(): void {
     option.value = String(level);
     const seconds = defaultConfig.responseWindowsMs[level - 1]! / 1000;
     option.textContent = category === 'target-acquisition' ? `Level ${level} · ${targetAcquisitionObjectsByLevel[level - 1]} objects`
-      : category === 'dynamic-tracking' ? `Level ${level} · ${[1, 5, 15][level - 1]} moving ${level === 1 ? 'object' : 'objects'}`
+      : category === 'dynamic-tracking' ? `Level ${level} · ${dynamicTrackingObjectCounts[level as keyof typeof dynamicTrackingObjectCounts]} moving ${level === 1 ? 'object' : 'objects'}`
       : `Level ${level} · ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
     return option;
   }));

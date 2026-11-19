@@ -11,13 +11,15 @@ export const targetAcquisitionConfig: TargetAcquisitionConfig = {
 };
 
 export const defaultDynamicTrackingConfig: DynamicTrackingConfig = {
-  category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3],
+  category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
   trialsPerLevel: 3, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [1000, 4000],
 };
 export const dynamicTrackingTargetRadiusPx = 24;
 export const dynamicTrackingSpeedPxPerSecond = 150;
 export const dynamicTrackingReferenceBandPx = 68;
-export const dynamicTrackingObjectCounts: Record<DynamicTrackingLevel, number> = { 1: 1, 2: 5, 3: 15 };
+export const dynamicTrackingObjectCounts: Record<DynamicTrackingLevel, number> = { 1: 1, 2: 5, 3: 15, 4: 30, 5: 60 };
+export const dynamicTrackingWatchDurationMs = 1500;
+export const dynamicTrackingHiddenDurationMs: Record<4 | 5, number> = { 4: 1000, 5: 2000 };
 export const visualReaction = {
   id: 'visual-reaction' as const,
   title: 'Visual Reaction',
@@ -75,7 +77,7 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   for (const key of Object.keys(config)) if (!keys.includes(key)) throw new Error(`Unknown configuration option: ${key}`);
   if (typeof config.seed !== 'string' || !config.seed.length || config.seed.length > 200) throw new Error('seed must be a nonempty string of at most 200 characters.');
   const levels = config.levels;
-  const maxLevel = category === 'dynamic-tracking' ? 3 : 5;
+  const maxLevel = 5;
   if (!Array.isArray(levels) || !levels.length || levels.some(x => !Number.isInteger(x) || x < 1 || x > maxLevel) || new Set(levels).size !== levels.length) throw new Error(`levels must contain unique integers from 1 to ${maxLevel}.`);
   if (!Number.isInteger(config.trialsPerLevel) || Number(config.trialsPerLevel) < 1 || Number(config.trialsPerLevel) > 1000) throw new Error('trialsPerLevel must be an integer from 1 to 1000.');
   if (typeof config.screenshotsPerSecond !== 'number' || !Number.isFinite(config.screenshotsPerSecond) || config.screenshotsPerSecond < 0.1 || config.screenshotsPerSecond > 30) throw new Error('screenshotsPerSecond must be between 0.1 and 30.');
@@ -117,7 +119,9 @@ function createTargetAcquisitionTrial(seed: string, level: Level, repetition: nu
 
 function createMovingObjects(seed: string, count: number): MovingObject[] {
   const random = randomFrom(seed);
-  const slots = Array.from({ length: 15 }, (_, index) => index);
+  const columns = count <= 15 ? 5 : Math.ceil(Math.sqrt(count * (1120 / (310 - dynamicTrackingReferenceBandPx))));
+  const rows = Math.ceil(count / columns);
+  const slots = Array.from({ length: count <= 15 ? 15 : count }, (_, index) => index);
   for (let i = slots.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [slots[i], slots[j]] = [slots[j]!, slots[i]!];
@@ -125,11 +129,17 @@ function createMovingObjects(seed: string, count: number): MovingObject[] {
   return slots.slice(0, count).map((slot, index) => {
     const angle = random() * Math.PI * 2;
     const speed = dynamicTrackingSpeedPxPerSecond;
+    const column = slot % columns;
+    const row = Math.floor(slot / columns);
+    const u = count <= 15 ? 0.1 + column * 0.2 + random() * 0.025
+      : 0.08 + column * (0.84 / Math.max(1, columns - 1)) + (random() - 0.5) * (0.02 / columns);
+    const v = count <= 15 ? 0.12 + row * 0.34 + random() * 0.04
+      : 0.12 + row * (0.76 / Math.max(1, rows - 1)) + (random() - 0.5) * (0.025 / rows);
     return {
       id: index === 0 ? 'required-star' : `distractor-${index}`,
       role: index === 0 ? 'required' : 'distractor',
-      u: 0.1 + (slot % 5) * 0.2 + random() * 0.025,
-      v: 0.12 + Math.floor(slot / 5) * 0.34 + random() * 0.04,
+      u,
+      v,
       velocityX: Math.cos(angle) * speed,
       velocityY: Math.sin(angle) * speed,
       radius: dynamicTrackingTargetRadiusPx,
@@ -148,7 +158,9 @@ export function createPlan(input: BenchmarkConfig): Scenario[] {
       const initialDelayMs = Math.round(delay[0] + randomFrom(`${seed}/delay`)() * (delay[1] - delay[0]));
       if (config.category === 'dynamic-tracking') {
         trials.push({ id: `dynamic-tracking-l${level}-t${repetition}`, category: 'dynamic-tracking', seed,
-          level: level as DynamicTrackingLevel, repetition, clickWindowMs: config.clickWindowMs, initialDelayMs,
+          level: level as DynamicTrackingLevel, repetition, clickWindowMs: config.clickWindowMs, initialDelayMs: level >= 4 ? 0 : initialDelayMs,
+          watchDurationMs: level >= 4 ? dynamicTrackingWatchDurationMs : 0,
+          hiddenDurationMs: level >= 4 ? dynamicTrackingHiddenDurationMs[level as 4 | 5] : 0,
           requiredTargetId: 'required-star', objects: createMovingObjects(seed, dynamicTrackingObjectCounts[level as DynamicTrackingLevel]) });
       } else if (config.category === 'target-acquisition') {
         trials.push(createTargetAcquisitionTrial(seed, level as Level, repetition, initialDelayMs));

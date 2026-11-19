@@ -1,5 +1,5 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
-export type DynamicTrackingLevel = 1 | 2 | 3;
+export type DynamicTrackingLevel = 1 | 2 | 3 | 4 | 5;
 export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking';
 export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
@@ -63,13 +63,16 @@ export interface DynamicTrackingScenario {
   repetition: number;
   clickWindowMs: number;
   initialDelayMs: number;
+  watchDurationMs: number;
+  hiddenDurationMs: number;
   requiredTargetId: string;
   objects: MovingObject[];
 }
 export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario;
 export interface AcquisitionObjectState { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }
 
-export type BrowserEventType = 'prepared' | 'started' | 'activated' | 'action-registered' | 'expired';
+export type TrialPhase = 'prepared' | 'waiting' | 'watching' | 'hidden' | 'active' | 'complete';
+export type BrowserEventType = 'prepared' | 'started' | 'phase-transition' | 'activated' | 'action-registered' | 'expired';
 export interface MovingTargetState {
   id: string;
   role: MovingObject['role'];
@@ -82,8 +85,9 @@ export interface BrowserEvent {
   type: BrowserEventType;
   atMs: number;
   clock: 'browser-performance';
-  phase: 'prepared' | 'waiting' | 'active' | 'complete';
+  phase: TrialPhase;
   plannedActivationAtMs?: number;
+  phaseDeadlineAtMs?: number;
   deadlineAtMs?: number;
   x?: number;
   y?: number;
@@ -96,7 +100,7 @@ export interface BrowserEvent {
 }
 export interface SceneSnapshot {
   trialId: string;
-  phase: BrowserEvent['phase'];
+  phase: TrialPhase;
   nowMs: number;
   target: { x: number; y: number; radius: number };
   objects: (AcquisitionObjectState | MovingTargetState)[];

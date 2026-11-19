@@ -19,7 +19,10 @@
     <section class="experiment" aria-label="ReactBench game">
       <div class="experiment-bar"><span class="state" id="status">Ready</span><p id="instruction" aria-live="polite">Wait for green. Then click once.</p><span class="attempt">One attempt</span></div>
       <div id="reference" class="reference" hidden><span>Match this symbol</span><canvas id="reference-symbol" width="40" height="40" role="img" aria-label="Reference shape"></canvas></div>
-      <canvas id="arena" aria-label="Click the circular target only after it turns green."></canvas>
+      <div class="arena-shell">
+        <div id="phase-countdown" class="phase-countdown" aria-live="polite" hidden></div>
+        <canvas id="arena" aria-label="Click the circular target only after it turns green."></canvas>
+      </div>
     </section>
     <section class="below-game">
       <div class="rules"><h2>The task</h2><p id="rules">Wait while the target is red. Click once it turns green.</p></div>
