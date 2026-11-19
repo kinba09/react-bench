@@ -1,0 +1,9 @@
+{
+  "category": "inhibitory-control",
+  "seed": "reactbench-v1",
+  "levels": [1, 2, 3, 4, 5],
+  "trialsPerLevel": 1,
+  "screenshotsPerSecond": 2,
+  "initialDelayMs": [1000, 4000],
+  "responseWindowsMs": [5000, 4000, 3000, 2000, 1000]
+}
