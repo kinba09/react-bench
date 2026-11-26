@@ -2,21 +2,21 @@ import type { BenchmarkConfig, Category, DynamicTrackingConfig, DynamicTrackingL
 
 export const defaultConfig: VisualReactionConfig = {
   category: 'visual-reaction', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
-  trialsPerLevel: 3, screenshotsPerSecond: 2,
+  trialsPerLevel: 3,
   initialDelayMs: [1000, 4000], responseWindowsMs: [5000, 4000, 3000, 2000, 1000],
 };
 export const targetAcquisitionConfig: TargetAcquisitionConfig = {
   category: 'target-acquisition', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
-  trialsPerLevel: 3, screenshotsPerSecond: 2, initialDelayMs: [1000, 4000],
+  trialsPerLevel: 3, initialDelayMs: [1000, 4000],
 };
 
 export const defaultDynamicTrackingConfig: DynamicTrackingConfig = {
   category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
-  trialsPerLevel: 3, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [1000, 4000],
+  trialsPerLevel: 3, clickWindowMs: 10_000, initialDelayMs: [1000, 4000],
 };
 export const defaultInhibitoryControlConfig: InhibitoryControlConfig = {
   category: 'inhibitory-control', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
-  trialsPerLevel: 1, screenshotsPerSecond: 2, initialDelayMs: [1000, 4000],
+  trialsPerLevel: 1, initialDelayMs: [1000, 4000],
   responseWindowsMs: [5000, 4000, 3000, 2000, 1000],
 };
 export const dynamicTrackingTargetRadiusPx = 24;
@@ -89,7 +89,7 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   const config = input as Record<string, unknown>;
   const category = config.category;
   if (category !== 'visual-reaction' && category !== 'target-acquisition' && category !== 'dynamic-tracking' && category !== 'inhibitory-control') throw new Error('category must be visual-reaction, target-acquisition, dynamic-tracking, or inhibitory-control.');
-  const keys = ['category', 'seed', 'levels', 'trialsPerLevel', 'screenshotsPerSecond',
+  const keys = ['category', 'seed', 'levels', 'trialsPerLevel',
     'initialDelayMs', ...(category === 'visual-reaction' || category === 'inhibitory-control' ? ['responseWindowsMs'] : category === 'dynamic-tracking' ? ['clickWindowMs'] : [])];
   for (const key of Object.keys(config)) if (!keys.includes(key)) throw new Error(`Unknown configuration option: ${key}`);
   if (typeof config.seed !== 'string' || !config.seed.length || config.seed.length > 200) throw new Error('seed must be a nonempty string of at most 200 characters.');
@@ -97,7 +97,6 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   const maxLevel = 5;
   if (!Array.isArray(levels) || !levels.length || levels.some(x => !Number.isInteger(x) || x < 1 || x > maxLevel) || new Set(levels).size !== levels.length) throw new Error(`levels must contain unique integers from 1 to ${maxLevel}.`);
   if (!Number.isInteger(config.trialsPerLevel) || Number(config.trialsPerLevel) < 1 || Number(config.trialsPerLevel) > 1000) throw new Error('trialsPerLevel must be an integer from 1 to 1000.');
-  if (typeof config.screenshotsPerSecond !== 'number' || !Number.isFinite(config.screenshotsPerSecond) || config.screenshotsPerSecond < 0.1 || config.screenshotsPerSecond > 30) throw new Error('screenshotsPerSecond must be between 0.1 and 30.');
 
   const delay = config.initialDelayMs ?? (category === 'visual-reaction' ? undefined : defaultConfig.initialDelayMs);
   if (!Array.isArray(delay) || delay.length !== 2 || delay.some(x => !Number.isFinite(x) || x < 100 || x > 60_000) || delay[0] > delay[1]) throw new Error('initialDelayMs must be an ordered pair between 100 and 60000 milliseconds.');

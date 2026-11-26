@@ -1,0 +1,8 @@
+{
+  "category": "visual-reaction",
+  "seed": "reactbench-v1",
+  "levels": [1],
+  "trialsPerLevel": 3,
+  "initialDelayMs": [1000, 4000],
+  "responseWindowsMs": [5000, 4000, 3000, 2000, 1000]
+}

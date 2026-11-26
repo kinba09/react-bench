@@ -47,7 +47,7 @@ test('seed replay preserves scenarios, not fabricated identical wall-clock timin
   assert.ok(second.trials[0].timing.reactionLatencyMs >= 0);
 });
 
-test('visual adapter receives image/input capabilities without privileged state', { timeout: 10_000 }, async () => {
+test('internal input fixture receives no images or privileged state', { timeout: 10_000 }, async () => {
   let prepares = 0;
   let runs = 0;
   const report = await runBenchmark({ config: quickConfig, adapterFactory: () => ({
@@ -59,10 +59,7 @@ test('visual adapter receives image/input capabilities without privileged state'
       assert.equal('scenario' in context, false);
       assert.equal('seed' in context, false);
       assert.match(context.instructions, /Wait while the target is red/);
-      const image = context.observe();
-      assert.deepEqual([...image.image.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-      assert.equal(image.width, 1280);
-      assert.equal(image.height, 720);
+      assert.equal('observe' in context, false);
       await assert.rejects(context.input.click(20, 20), /preparation/);
     },
     async run(context) { runs++; assert.equal('oracle' in context, false); },
@@ -71,14 +68,14 @@ test('visual adapter receives image/input capabilities without privileged state'
   assert.equal(runs, 1);
   assert.equal(report.comparisonClass, 'visual');
   assert.equal(report.trials[0].outcome, 'expired');
-  assert.ok(report.trials[0].observations.some(x => x.deliveries.length));
+  assert.equal('observations' in report.trials[0], false);
 });
 
 for (const [name, override] of Object.entries({
   'duplicate levels': { levels: [1, 1] },
   'unknown category': { category: 'not-implemented' },
   'empty seed': { seed: '' },
-  'zero capture rate': { screenshotsPerSecond: 0 },
+  'removed capture option': { screenshotsPerSecond: 2 },
   'reversed delays': { initialDelayMs: [4000, 1000] },
   'missing window': { responseWindowsMs: [1000] },
   'unknown option': { speed: 2 },

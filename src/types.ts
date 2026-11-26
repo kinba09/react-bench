@@ -10,7 +10,6 @@ interface SharedConfig {
   seed: string;
   levels: Level[];
   trialsPerLevel: number;
-  screenshotsPerSecond: number;
 }
 export interface VisualReactionConfig extends SharedConfig {
   category: 'visual-reaction';
@@ -122,25 +121,8 @@ export interface SceneSnapshot {
   condition?: InhibitoryControlCondition;
   events: BrowserEvent[];
 }
-export interface ObservationRecord {
-  id: string;
-  clock: 'runner-performance';
-  requestedAtMs: number;
-  returnedAtMs: number;
-  exactCaptureAtMs: null;
-  byteLength: number;
-  deliveries: number[];
-}
-export interface Observation {
-  id: string;
-  image: Uint8Array;
-  mimeType: 'image/png';
-  width: 1280;
-  height: 720;
-}
 export interface ActionRecord {
   id: string;
-  observationId: string | null;
   type: 'click';
   x: number;
   y: number;
@@ -154,8 +136,7 @@ export interface VisualContext {
   trialId: string;
   instructions: string;
   signal: AbortSignal;
-  observe(): Observation | null;
-  input: { click(x: number, y: number, observationId?: string): Promise<void> };
+  input: { click(x: number, y: number): Promise<void> };
 }
 export interface OracleContext extends VisualContext {
   oracle: { snapshot(): Promise<SceneSnapshot> };
@@ -165,6 +146,8 @@ export interface AgentMetadata {
   model: string | null;
   adapterVersion?: string | null;
   access: 'privileged-oracle' | 'visual';
+  tool?: string;
+  contextPolicy?: string;
 }
 export interface VisualAdapter {
   metadata: AgentMetadata & { access: 'visual' };
@@ -183,13 +166,13 @@ export interface TrialResult {
   outcome: Outcome;
   conditionOutcome?: InhibitoryControlOutcome;
   events: BrowserEvent[];
-  observations: ObservationRecord[];
   actions: ActionRecord[];
+  display?: BrowserDisplay;
   timing: {
     preparationMs: number;
     reactionLatencyMs: number | null;
     modelProcessingMs: null;
-    measuredCaptureHz: number | null;
+    preparationClock: 'runner-performance' | 'browser-performance';
     browserTimeOriginMs: number;
     runnerClock: 'runner-performance';
     reactionClock: 'browser-performance';
@@ -212,7 +195,9 @@ export interface RunSummary {
   byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null; objectsPerTrial: number | null }[];
 }
 export interface RunReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  status: 'complete' | 'cancelled';
+  plannedTrials: number;
   runId: string;
   createdAt: string;
   category: Category;
@@ -221,18 +206,18 @@ export interface RunReport {
   agent: AgentMetadata;
   config: BenchmarkConfig;
   environment: {
-    viewport: { width: 1280; height: 720 };
-    deviceScaleFactor: 1;
+    viewport: { width: number; height: number } | null;
+    deviceScaleFactor: number | null;
     browser: string;
-    browserVersion: string;
-    headless: boolean;
+    browserVersion: string | null;
+    headless: boolean | null;
     nodeVersion: string;
     platform: string;
     architecture: string;
     cpu: string;
     cpuCount: number;
     memoryBytes: number;
-    actionInterface: 'playwright-mouse';
+    actionInterface: 'playwright-mouse' | 'external-browser-tools';
     targetRadiusPx: number;
     acquisitionObjectSizePx: number;
     movementSpeedPxPerSecond: number | null;
@@ -245,6 +230,29 @@ export interface BrowserEnvironment {
   prepare(scenario: Scenario, index: number, total: number): SceneSnapshot;
   start(): void;
   snapshot(): SceneSnapshot;
+  cancel(): void;
+}
+
+export interface BrowserDisplay {
+  viewport: { width: number; height: number };
+  deviceScaleFactor: number;
+  userAgent: string;
+}
+export interface SessionCompletion {
+  clientId: string;
+  trialId: string;
+  events: BrowserEvent[];
+  browserTimeOriginMs: number;
+  display: BrowserDisplay;
+}
+export interface SessionView {
+  id: string;
+  state: 'ready' | 'active' | 'between-trials' | 'complete' | 'cancelled';
+  index: number;
+  total: number;
+  level: Level;
+  scenario: Scenario | null;
+  correct: number;
 }
 declare global {
   interface Window { reactBenchEnvironment: BrowserEnvironment }

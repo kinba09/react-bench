@@ -12,6 +12,7 @@
     "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
     "test:runner": "npm run build && node --test tests/runner.test.mjs",
     "benchmark": "npm run build && node dist/cli.js run",
+    "session": "npm run build && node dist/cli.js session",
     "dev": "npm run build && node dist/cli.js serve",
     "browsers": "playwright install chromium"
   },

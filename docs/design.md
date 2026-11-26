@@ -1,14 +1,15 @@
-# ReactBench design discussion
+# ReactBench design
 
-This document captures the agreed design. Timing defaults remain uncalibrated. Issues #2–#5 implement Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels; issue #6 adds Inhibitory Control go/no-go trials. Delayed-stop and the other categories remain planned separately.
+Updated decision: ReactBench runs the benchmark in a browser; agents operate it through their own browser/computer tools. This supersedes the earlier fixed-rate screenshot feed and required screenshot/action MCP bridge. Game rules and scoring remain as agreed. Timing defaults remain uncalibrated.
 
 ## Agreed scope
 
-- Six categories, with five numbered difficulty levels per category.
-- Controlled games in Chromium, advancing while the agent observes, reasons, and acts.
-- Initial runs contain three trials per category per level: 90 trials per agent per observation setting. Larger runs can be configured later.
-- No bundled offline pixel-based visual baseline is required. A privileged scripted oracle supports offline runs; visual agents use the screenshot/action adapter.
-- Evaluated visual agents receive screenshots and task instructions and interact through mouse/keyboard actions, without privileged environment state or DOM access.
+- Six categories, five levels each, and three trials per category per level: 90 trials per agent setup in the full initial profile.
+- Local browser games continue advancing while an agent observes, reasons, and acts.
+- ReactBench presents instructions, controls trial lifecycle, records game events and input registration, grades deterministically, and exports results.
+- Agents own browser/computer observation and input. ReactBench does not capture continuously, supply screenshots, or prescribe screenshot cadence for evaluated sessions.
+- An agent can use its own tools, including a tool backed by MCP. No ReactBench screenshot/action bridge or mandatory agent adapter is required.
+- Keep privileged oracle validation separate from external-agent evaluation. Existing visual-task rules still prohibit hidden-state inspection, game-function calls, and DOM/JavaScript shortcuts to solve the task; using an agent's own tools does not grant oracle access.
 
 ## Games and progression
 
@@ -59,59 +60,42 @@ Each target or cue permits one click attempt. An incorrect or premature click fa
 
 Correct withholding on no-go and stop trials is a successful outcome. Intentional waiting is not automatically classified as a timeout failure.
 
-## Observations and timing
+## Observation and timing ownership
 
-Screenshot capture runs independently at the configured cadence, retaining the latest available image. The standard configuration uses a 1280 × 720 browser viewport, device scale 1, and two screenshots per second; reports record the actual cadence achieved, and agents compared within a profile use identical display settings.
+The benchmark owns the game, browser-event instrumentation, trial schedule, grading, and exports. The agent owns when and how it observes and acts through its own tools. The page remains active during slow observations, tool calls, and reasoning. ReactBench does not feed images to the agent or require observation telemetry to grade a trial.
 
-Reaction latency uses a task-defined stimulus activation and browser action registration measured on the same browser clock. This is software timing rather than exact physical pixel-onset timing; screenshot request/return measurements are separate, and unexposed internal model timings remain unavailable.
+Record actual browser/display settings and tool identities. Use a 1280 × 720 viewport and device scale 1 as the initial controlled profile where the agent's tool supports them; otherwise record the actual settings and label the profile separately. Different tool setups measure different complete agent setups rather than isolated model inference speed.
 
-Category metrics retain their meaning: reaction delay, hit accuracy, inhibition outcomes, sequence accuracy, and activation-window timing error are not combined into one score. Trials with no required click do not receive an invented reaction latency.
+Measure reaction latency from task-defined stimulus activation to browser input-handler registration using the same browser clock. For occluded tracking the trigger is reappearance; sequences have per-step triggers. Correct withholding has no invented click latency; Temporal Decision-Making retains signed and absolute center-relative error.
 
-The initial report includes correct/total counts, individual outcomes, and measured timings. P95 is marked "insufficient samples" in the three-trial profile; larger profiles can support later P95 comparisons.
+Agent-tool logs may supply additional observation/dispatch timings, but they are optional evidence. Missing screenshot timestamps, decision completion, internal model timing, or hardware details remain unavailable. Never derive cross-clock intervals without validated synchronization or claim exact physical display timing.
 
-## Agreed run protocol
+Report correct/total counts, failure reasons, valid-response medians with sample counts, and individual evidence. Keep categories separate, produce no composite score, and mark P95 insufficient samples for the three-trial profile.
 
-1. Preparation: provide rules and reference targets before asking the adapter to signal readiness. After readiness, begin the seeded 1–4 second initial wait; preparation time is logged separately from reaction latency.
-2. Trial isolation: reset game state and agent context between trials. Attribute late responses to their originating trial and discard them before they can affect the next trial; use the same seeded scenarios and order for agents compared under the same profile.
-3. Adapter boundary: the initial release uses trusted local adapter code behind an image/action-only interface. Visual agents receive instructions and screenshots without DOM, hidden state, or future seeds; sandboxing arbitrary untrusted adapter code is additional scope.
-4. Stop-delay randomization: treat the approved stop-delay values as nominal centers and sample each planned stop delay uniformly from 80% to 120% of its nominal value using the trial seed. Log nominal, planned, and actually observed browser timings separately; all proposed delay ranges remain within the approved response windows.
+## Browser evaluation protocol
 
-## Decision tree status
+1. Start a local evaluation session with a configuration, seed, and agent/tool metadata. Open the task in a browser the agent can access, or provide its URL for the agent's own tools to open.
+2. Show rules, reference targets, run/trial identity, and a visible readiness/start control. Preparation time is separate from response latency; do not start deadlines while waiting for the agent to connect.
+3. After readiness, begin the category's phases and seeded initial wait. The agent observes and acts through its own tools; the environment continues in real time.
+4. Record actual game transitions and browser-registered input under the active trial identity. Grade recorded evidence, including misses, early/wrong clicks, omissions, and successful withholding.
+5. Close completed/cancelled trials to scoring. Use explicit inter-trial readiness and quiescence so pending external input cannot score against the next trial. Native pointer events do not carry their originating trial ID; do not claim late-input attribution or cancellation guarantees without evidence from the external tool. Record limitations and test the chosen transition policy.
+6. Reset game state and prepare the next seeded trial. Fresh agent context is managed by the external launcher/operator and must be documented; the benchmark page cannot reset an arbitrary external agent's memory.
+7. Export JSON, JSONL, and an offline report with complete trial evidence. Keep ground-truth state and future scenarios outside participant-facing instructions and controls; hardening against malicious local tools is outside the initial trust boundary.
 
-1. Game rules: progression, category explanations, and wait-and-reacquire occlusion behavior agreed.
-2. Trial composition: agreed, including one go, one no-go, and one delayed-stop trial at each Inhibitory Control level.
-3. Timing configuration: agreed, including response windows, cue delays, Watch → Hidden → Click phases, viewport, device scale, and screenshot cadence.
-4. Run protocol: preparation, trial isolation, matched seeded scenarios, trusted adapter boundaries, and stop-delay randomization agreed. Initial small-sample reporting is agreed.
-5. Execution surfaces: Codex CLI and Claude Code are agreed client integrations through a shared restricted MCP screenshot/action bridge. A provider-neutral adapter interface also supports users bringing API-backed or local agents without a coding subscription; integrations require implementation validation.
-6. Implementation: issues #2–#5 deliver Visual Reaction, Target Acquisition, and all five Dynamic Tracking oracle paths, including wait-and-reacquire occlusion. Issue #6 adds the Inhibitory Control go/no-go oracle path with one go and one no-go trial at each level; delayed-stop and the remaining sub-issues define the rest of the MVP.
+For delayed-stop trials, sample planned delays uniformly within 80%–120% of each nominal center using the trial seed. Keep nominal, sampled planned, and observed signal times distinct.
 
-## Agreed client integrations
+## Client integrations
 
-Codex CLI is installed locally. Official documentation supports ChatGPT subscription sign-in, non-interactive execution with saved CLI authentication, and local MCP servers; the benchmark adapter will combine those capabilities through the official CLI.
+Codex CLI, Claude Code, API-backed agents, local agents, and existing computer-use frameworks all target the same browser task using their own tools. Optional launch helpers may provide the URL, rules, browser connection details, metadata, fresh context, and cancellation coordination. They must not replace the agent's observation/action loop with a ReactBench image feed.
 
-Claude Code is also included in the design. Official documentation supports eligible Claude subscription sign-in, MCP servers with inline image results, and non-interactive CLI execution with `claude -p`; the subscription route uses the official client and its native authentication. Claude Code is not currently installed on this machine, and no installation has been requested.
+Use each client's supported local authentication. Client/model access and tool availability are setup prerequisites to validate, not assumptions established by this plan. Default CI uses scripted browser participants without commercial credentials; genuine client smoke runs are opt-in and must provide evidence before live support is claimed. No mandatory ReactBench MCP bridge is planned.
 
-- Start the benchmark browser and local screenshot/action bridge.
-- Use Codex CLI authenticated with the user's ChatGPT account, or Claude Code authenticated with an eligible Claude account. API authentication is a distinct billing route.
-- Provide fresh instructions and context per trial and restrict the evaluated agent to screenshots and permitted input actions.
-- Capture screenshots at the configured cadence; the agent requests the newest available image. Capture cadence does not imply model decisions at the same frequency.
-- Record browser outcomes and exposed tool/adapter timings; internal model processing remains unavailable when not exposed.
-- Identify results by the configured client, model, and bridge; these measure the complete agent setup. Subscription usage limits apply; provider API usage has separate billing.
+## Implementation status and migration
 
-These client adapters have not been implemented or validated. Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels can run locally through the offline oracle; the other categories and client integrations remain separate implementation tickets.
+Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels are implemented; PR #19 completed occlusion. Inhibitory Control currently has go/no-go trials, with delayed-stop still planned. Browser practice works, and the privileged offline runner produces reports.
 
-References: [authentication](https://learn.chatgpt.com/docs/auth), [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode), [separate API billing](https://help.openai.com/en/articles/9039756-managing-billing-for-chatgpt-and-the-api-platform).
+Scored Visual Reaction sessions now run at `npm run session`, defaulting to three seeded level-1 trials. The page connects to a loopback session controller, claims the session on Start, and submits browser event traces for deterministic server grading. Explicit preparation/start separates trials, cancellation exports finished trials as an incomplete run, and lost completion responses can be retried without rescoring. The session remains available for report downloads.
 
-Claude references: [authentication](https://code.claude.com/docs/en/authentication), [MCP and image results](https://code.claude.com/docs/en/mcp), [CLI automation](https://code.claude.com/docs/en/headless), [eligible subscription access](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-max-or-ultra-plan).
+The sampler and screenshot-rate configuration have been removed from session and offline oracle execution. Schema 2 omits required image/cadence records, uses browser-clock preparation for sessions, and records actual per-trial display settings. External dispatch/model timing remains unavailable. Browser traces are trusted local application evidence, not tamper-proof against malicious local tools. Active-trial reload recovery, genuine client validation, and session support for the other games remain follow-up work.
 
-## Bring your own agent
-
-ReactBench does not require a Codex or Claude subscription. The common adapter contract lets a user connect an API-backed agent, a locally hosted visual model with an action loop, or an existing computer-use framework.
-
-The intended workflow is to run the local benchmark, configure or implement a thin adapter for the user's agent, and select a benchmark configuration. The adapter supplies screenshots and instructions to the agent and translates its chosen actions into the same permitted browser inputs used by other evaluated agents; provider-native computer-use action formats are translated at this boundary.
-
-MCP is the client-facing route for Codex CLI and Claude Code, not a mandatory dependency of every custom agent. API-backed agents use the user's own separately billed API access; local agents use the user's own runtime and hardware. The benchmark does not require a subscription login to connect either route.
-
-Results include agent/model identity, client or harness version, observation policy, input interface, seed/configuration, and available environment metadata. An existing agent must conform to the selected observation/action profile for directly comparable results; screenshot-only restrictions continue to apply.
-
-The offline oracle remains available for checking the benchmark without a model or commercial account and is clearly separated from evaluated visual-agent results.
+See [the implementation plan](plan.md) for dependencies and parallel work. Delayed-stop, Multi-Step Reaction, and Temporal Decision-Making retain their agreed game rules and can develop alongside the session migration with coordinated shared contracts.
