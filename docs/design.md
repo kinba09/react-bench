@@ -50,7 +50,7 @@ Dynamic Tracking is graded as a correct or incorrect hit, with no pointer-to-cen
 
 ### Inhibitory Control
 
-Go/no-go and delayed-stop variants are reported separately. A delayed-stop trial succeeds only if no click registers during its response window; pre-stop and post-stop responses are reported separately as failed stops.
+Go/no-go and delayed-stop variants are reported separately. A delayed-stop trial shows the same initial green cue as a go trial, then switches to a red stop cue. Delayed-stop succeeds when the response window ends without a registered click. A click before or after the observed stop cue immediately fails the trial. If a click ends the trial before the stop cue was shown, the trace retains its planned timing and the report leaves observed timing unavailable.
 
 The three initial trials at each level consist of one go, one no-go, and one delayed-stop trial. This composition is included within the 90-trial run, not added on top of it.
 
@@ -92,10 +92,10 @@ Use each client's supported local authentication. Client/model access and tool a
 
 ## Implementation status and migration
 
-Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels are implemented; PR #19 completed occlusion. Inhibitory Control currently has go/no-go trials, with delayed-stop still planned. Browser practice works, and the privileged offline runner produces reports.
+Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels are implemented; PR #19 completed occlusion. Inhibitory Control includes go, no-go, and delayed-stop. Browser practice works, and the privileged offline runner produces reports for these games.
 
 Scored sessions run at `npm run session`, defaulting to three seeded level-1 Visual Reaction trials. The Target Acquisition and Dynamic Tracking configs each run all five levels with three trials per level. The page connects to a loopback session controller, claims the session on Start, and submits browser event traces for deterministic server grading. Explicit preparation/start separates trials, cancellation exports finished trials as an incomplete run, and lost completion responses can be retried without rescoring. The session remains available for report downloads.
 
 The sampler and screenshot-rate configuration have been removed from session and offline oracle execution. Schema 2 omits required image/cadence records, uses browser-clock preparation for sessions, and records actual per-trial display settings. External dispatch/model timing remains unavailable. Browser traces are trusted local application evidence, not tamper-proof against malicious local tools. Active-trial reload recovery, genuine client validation, and session support for the other games remain follow-up work.
 
-See [the implementation plan](plan.md) for dependencies and parallel work. Delayed-stop, Multi-Step Reaction, and Temporal Decision-Making retain their agreed game rules and can develop alongside the session migration with coordinated shared contracts.
+See [the implementation plan](plan.md) for dependencies and parallel work. Multi-Step Reaction and Temporal Decision-Making retain their agreed game rules and can develop alongside the session migration with coordinated shared contracts.

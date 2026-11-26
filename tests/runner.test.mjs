@@ -83,15 +83,15 @@ for (const outcome of ['premature', 'wrong', 'expired']) {
   });
 }
 
-test('plans one seeded go and no-go cue per level with the specified response windows', async () => {
+test('plans a seeded go, no-go and delayed-stop cue per level with the specified response windows', () => {
   const first = createPlan(defaultInhibitoryControlConfig);
   const replay = createPlan(defaultInhibitoryControlConfig);
-  assert.equal(first.length, 10);
+  assert.equal(first.length, 15);
   assert.deepEqual(first, replay);
   assert.equal(new Set(first.map(trial => trial.id)).size, first.length);
   for (const level of [1, 2, 3, 4, 5]) {
     const trials = first.filter(trial => trial.level === level);
-    assert.deepEqual(trials.map(trial => trial.condition).sort(), ['go', 'no-go']);
+    assert.deepEqual(trials.map(trial => trial.condition).sort(), ['delayed-stop', 'go', 'no-go']);
     assert.ok(trials.every(trial => trial.category === 'inhibitory-control'));
     assert.ok(trials.every(trial => trial.responseWindowMs === [5000, 4000, 3000, 2000, 1000][level - 1]));
     assert.ok(trials.every(trial => trial.initialDelayMs >= 1000 && trial.initialDelayMs <= 4000));
@@ -117,7 +117,7 @@ class InhibitoryOutcomeAdapter extends OracleAdapter {
 test('reports go responses, go omissions, forbidden clicks, and successful withholding through the runner', { timeout: 30_000 }, async () => {
   const output = await mkdtemp(join(tmpdir(), 'reactbench-inhibitory-'));
   const config = { ...defaultInhibitoryControlConfig, seed: 'inhibitory-outcomes', levels: [5], trialsPerLevel: 4,
-    initialDelayMs: [100, 100], responseWindowsMs: [250, 250, 250, 250, 250] };
+    conditions: ['go', 'no-go'], initialDelayMs: [100, 100], responseWindowsMs: [250, 250, 250, 250, 250] };
   const plan = createPlan(config);
   const modes = new Map(plan.map(trial => [trial.id,
     trial.condition === 'go' ? ['respond', 'omit', 'wrong', 'premature'][trial.repetition - 1]
@@ -142,6 +142,7 @@ test('reports go responses, go omissions, forbidden clicks, and successful withh
     assert.equal(report.summary.inhibitoryControl.byCondition[1].medianReactionLatencyMs, null);
     assert.deepEqual(report.summary.inhibitoryControl.outcomes, {
       'go-response': 1, 'go-omission': 1, 'go-wrong-click': 1, 'go-premature-click': 1, 'forbidden-click': 1, withheld: 3,
+      'pre-stop-click': 0, 'post-stop-click': 0, 'stop-withheld': 0,
     });
 
     const goResponse = report.trials.find(trial => trial.conditionOutcome === 'go-response');
@@ -199,7 +200,7 @@ test('does not register actions at or beyond the cue deadline in the runner repo
     }
   }
   const config = { ...defaultInhibitoryControlConfig, seed: 'inhibitory-deadline', levels: [5], trialsPerLevel: 1,
-    initialDelayMs: [100, 100], responseWindowsMs: [120, 120, 120, 120, 120] };
+    conditions: ['go', 'no-go'], initialDelayMs: [100, 100], responseWindowsMs: [120, 120, 120, 120, 120] };
   const report = await runBenchmark({ config, adapterFactory: () => new DeadlineAdapter() });
   assert.equal(report.trials.length, 2);
   for (const trial of report.trials) {

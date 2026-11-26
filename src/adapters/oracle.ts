@@ -18,7 +18,7 @@ export class OracleAdapter implements PrivilegedAdapter {
   async run(context: OracleContext): Promise<void> {
     if (!await this.waitForActive(context)) return;
     const state = await context.oracle.snapshot();
-    if (state.condition === 'no-go') return;
+    if (state.condition === 'no-go' || state.condition === 'delayed-stop') return;
     if (state.target) {
       await context.input.click(state.target.x, state.target.y);
       return;

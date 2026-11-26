@@ -1,6 +1,6 @@
 import { createPlan, defaultConfig, defaultConfigFor, dynamicTrackingObjectCounts, dynamicTrackingReferenceBandPx, targetAcquisitionObjectsByLevel, taskRegistry, validateConfig } from './registry.js';
 import { grade } from './grader.js';
-import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
+import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, InhibitoryControlScenario, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#arena')!;
 const context = canvas.getContext('2d')!;
@@ -30,6 +30,8 @@ let motionStartedAtMs: number | null = null;
 let lastCountdownSecond: number | null = null;
 let referenceValue: SceneSnapshot['reference'] = null;
 let plannedActivation = 0;
+let plannedStopAtMs: number | null = null;
+let stopShown = false;
 let watchDeadline = 0;
 let hiddenDeadline = 0;
 let deadline = 0;
@@ -157,7 +159,7 @@ function draw(nowMs = performance.now()): void {
     context.arc(target.x - rect.left, target.y - rect.top, target.radius, 0, Math.PI * 2);
     context.fillStyle = phase === 'complete' ? '#7c8591'
       : scenario.category === 'visual-reaction' ? phase === 'active' ? '#15804c' : '#cc423a'
-        : phase === 'active' ? scenario.condition === 'go' ? '#15804c' : '#cc423a' : '#aeb6c0';
+        : phase === 'active' ? inhibitoryCue(scenario) === 'Go' ? '#15804c' : '#cc423a' : '#aeb6c0';
     context.fill();
     context.beginPath();
     context.arc(target.x - rect.left, target.y - rect.top, 4, 0, Math.PI * 2);
@@ -248,9 +250,28 @@ function finish(message: string): void {
 function finishExpiredWindow(now: number): void {
   record('expired', now, { deadlineAtMs: deadline });
   const graded = grade(events, scenario);
-  result.textContent = graded.conditionOutcome === 'withheld' ? 'Withheld'
+  const withheld = graded.conditionOutcome === 'withheld' || graded.conditionOutcome === 'stop-withheld';
+  result.textContent = withheld ? 'Withheld'
     : graded.conditionOutcome === 'go-omission' ? 'Go omission' : 'No response';
-  finish(graded.conditionOutcome === 'withheld' ? 'Correctly withheld.' : 'Response window expired.');
+  finish(withheld ? 'Correctly withheld.' : 'Response window expired.');
+}
+
+function inhibitoryCue(trial: InhibitoryControlScenario): 'Go' | 'No-go' | 'Stop' {
+  return trial.condition === 'no-go' ? 'No-go' : stopShown ? 'Stop' : 'Go';
+}
+function updateInhibitoryCountdown(trial: InhibitoryControlScenario, now: number): void {
+  const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+  if (remaining === lastCountdownSecond) return;
+  status.textContent = `${inhibitoryCue(trial)} · ${remaining} s`;
+  lastCountdownSecond = remaining;
+}
+function showInhibitoryCue(trial: InhibitoryControlScenario, now: number): void {
+  const cue = inhibitoryCue(trial);
+  lastCountdownSecond = null;
+  updateInhibitoryCountdown(trial, now);
+  instruction.textContent = cue === 'Go' ? 'Green cue: click the target once.'
+    : cue === 'Stop' ? 'Stop cue: withhold until the response window ends.'
+      : 'Red cue: do not click until the response window ends.';
 }
 function frame(): void {
   const now = performance.now();
@@ -275,8 +296,12 @@ function frame(): void {
     phase = 'active';
     if (scenario.category === 'dynamic-tracking') motionStartedAtMs = now;
     deadline = now + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs);
+    if (scenario.category === 'inhibitory-control' && scenario.condition === 'delayed-stop') {
+      plannedStopAtMs = now + scenario.plannedStopDelayMs;
+    }
     draw(now);
-    record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline });
+    record('activated', now, { plannedActivationAtMs: plannedActivation, deadlineAtMs: deadline,
+      ...(plannedStopAtMs === null ? {} : { plannedStopAtMs }) });
     if (scenario.category === 'dynamic-tracking') {
       status.textContent = 'Moving';
       instruction.textContent = 'Click the star now. The objects keep moving.';
@@ -284,14 +309,18 @@ function frame(): void {
       status.textContent = 'Find the match';
       instruction.textContent = 'Click the object that matches the reference symbol.';
     } else if (scenario.category === 'inhibitory-control') {
-      const remaining = Math.max(1, Math.ceil((deadline - now) / 1000));
-      status.textContent = `${scenario.condition === 'go' ? 'Go' : 'No-go'} · ${remaining} s`;
-      lastCountdownSecond = remaining;
-      instruction.textContent = scenario.condition === 'go' ? 'Green cue: click the target once.' : 'Red cue: do not click until the response window ends.';
+      showInhibitoryCue(scenario, now);
     } else {
       status.textContent = 'Green';
       instruction.textContent = 'Click the target now.';
     }
+  }
+  if (scenario.category === 'inhibitory-control' && phase === 'active' && !stopShown
+    && plannedStopAtMs !== null && now >= plannedStopAtMs && now < deadline) {
+    stopShown = true;
+    draw(now);
+    record('stop-signal', now, { plannedStopAtMs });
+    showInhibitoryCue(scenario, now);
   }
   if (phase === 'active' && now >= deadline) {
     finishExpiredWindow(now);
@@ -316,11 +345,7 @@ function frame(): void {
         }
       }
     } else if (scenario.category === 'inhibitory-control' && phase === 'active') {
-      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
-      if (remaining !== lastCountdownSecond) {
-        status.textContent = `${scenario.condition === 'go' ? 'Go' : 'No-go'} · ${remaining} s`;
-        lastCountdownSecond = remaining;
-      }
+      updateInhibitoryCountdown(scenario, now);
     }
     animation = requestAnimationFrame(frame);
   }
@@ -345,6 +370,8 @@ const environment: BrowserEnvironment = {
     phase = 'prepared';
     events = [];
     motionStartedAtMs = null;
+    plannedStopAtMs = null;
+    stopShown = false;
     lastCountdownSecond = null;
     watchDeadline = 0;
     hiddenDeadline = 0;
@@ -444,11 +471,13 @@ document.addEventListener('click', event => {
   }
 
   if (scenario.category === 'inhibitory-control') {
-    const hit = scenario.condition === 'go' && Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
+    const hit = inhibitoryCue(scenario) === 'Go' && Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
     record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted });
     const graded = grade(events, scenario);
     result.textContent = graded.reactionLatencyMs === null ? graded.conditionOutcome ?? graded.outcome : `${Math.round(graded.reactionLatencyMs)} ms`;
     finish(graded.conditionOutcome === 'forbidden-click' ? 'A red cue forbids clicking. Trial complete.'
+      : graded.conditionOutcome === 'pre-stop-click' ? 'Clicked before the stop cue. Trial complete.'
+        : graded.conditionOutcome === 'post-stop-click' ? 'Clicked after the stop cue. Trial complete.'
       : graded.conditionOutcome === 'go-premature-click' ? 'Too soon. Wait for the cue.'
         : graded.conditionOutcome === 'go-wrong-click' ? 'Incorrect target. Trial complete.' : 'Green cue answered. Trial complete.');
     return;
