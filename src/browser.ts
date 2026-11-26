@@ -1,6 +1,6 @@
 import { createPlan, defaultConfig, defaultConfigFor, dynamicTrackingObjectCounts, dynamicTrackingReferenceBandPx, targetAcquisitionObjectsByLevel, taskRegistry, validateConfig } from './registry.js';
 import { grade } from './grader.js';
-import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, InhibitoryControlScenario, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol } from './types.js';
+import type { AcquisitionObjectState, BrowserEnvironment, BrowserEvent, Category, InhibitoryControlScenario, MovingTargetState, Scenario, SceneSnapshot, TargetSymbol, VisualReactionScenario } from './types.js';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#arena')!;
 const context = canvas.getContext('2d')!;
@@ -39,6 +39,11 @@ let animation = 0;
 let keepTargetsHiddenAfterFinish = false;
 let trialComplete: (() => void) | undefined;
 let pointerTrialId: string | undefined;
+
+function reactionTargetAt(trial: VisualReactionScenario | InhibitoryControlScenario, rect: DOMRect): SceneSnapshot['target'] {
+  return { x: rect.left + rect.width * trial.target.u,
+    y: rect.top + rect.height * trial.target.v, radius: trial.target.radius };
+}
 
 function reflectedPosition(value: number, minimum: number, maximum: number): number {
   const span = maximum - minimum;
@@ -152,8 +157,7 @@ function draw(nowMs = performance.now()): void {
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, rect.width, rect.height);
   if (scenario.category === 'visual-reaction' || scenario.category === 'inhibitory-control') {
-    target = { x: rect.left + rect.width * scenario.target.u,
-      y: rect.top + rect.height * scenario.target.v, radius: scenario.target.radius };
+    target = reactionTargetAt(scenario, rect);
     objects = [];
     referenceValue = null;
     context.beginPath();
@@ -467,6 +471,10 @@ document.addEventListener('click', event => {
   if (phase === 'active' && now >= deadline) {
     finishExpiredWindow(now);
     return;
+  }
+  if (scenario.category === 'visual-reaction' || scenario.category === 'inhibitory-control') {
+    // Native tools may scroll after observing the cue and before their click arrives.
+    target = reactionTargetAt(scenario, canvas.getBoundingClientRect());
   }
   if (scenario.category === 'dynamic-tracking') {
     const objects = prematureDynamicPhase ? [] : movingTargetsAt(now);

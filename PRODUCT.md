@@ -26,7 +26,7 @@ Remaining work includes Multi-Step Reaction, Temporal Decision-Making, client va
 
 ## Evidence on Hand
 
-The glossary, design, MVP specification, implementation plan, game tests, and issues #1–#15 describe the benchmark. The #11 implementation is locally validated and awaits review. Genuine Codex and Claude runs remain unverified. See the [browser session guide](docs/browser-sessions.md) and [implementation plan](docs/plan.md).
+The glossary, design, MVP specification, implementation plan, game tests, and issues #1–#15 describe the benchmark. The #11 implementation is merged. Native timing validation for #10 is implemented and awaits review. Genuine Codex and Claude runs remain unverified. See the [browser session guide](docs/browser-sessions.md) and [implementation plan](docs/plan.md).
 
 ## Product Principles
 
