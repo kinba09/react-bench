@@ -20,13 +20,13 @@ ReactBench serves and opens the browser task, presents instructions, schedules s
 
 ## Capabilities and Constraints
 
-Implemented: five levels each of Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control. Dynamic Tracking has 1, 5, 15, 30, and 60 moving objects; levels 4–5 include Watch, Hidden, and Click phases. Default oracle profiles use three trials per level. Inhibitory Control uses one go, one no-go, and one delayed-stop trial at each level. Browser practice, privileged offline oracle reports, and scored browser sessions for Visual Reaction, Target Acquisition, and Dynamic Tracking work today. The default browser session has three seeded Visual Reaction level-1 trials with explicit readiness, cancellation, and JSON/JSONL/HTML exports; agents use their own tools.
+Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control each have five levels and support practice, privileged offline oracle runs, and scored browser sessions. Dynamic Tracking has 1, 5, 15, 30, and 60 moving objects. Levels 4 and 5 include Watch, Hidden, and Click phases. Default oracle profiles use three trials per level. Inhibitory Control runs one go, one no-go, and one delayed-stop trial per level. The default browser session offers three seeded Visual Reaction level-1 trials with readiness controls, cancellation, and JSON/JSONL/HTML exports. Agents use their own tools.
 
-Planned: extend scored browser sessions to the other games, finish Multi-Step Reaction, Temporal Decision-Making, client validation, and the full 90-trial profile. Continuous capture and screenshot configuration have been removed from both session and oracle execution. Schema 2 records game events and actual display metadata without required observation telemetry. Correct withholding has no invented click latency. Scoring is deterministic, timing is software timing with clock provenance, unavailable internal model timings remain unavailable, and no composite score is produced.
+Remaining work includes Multi-Step Reaction, Temporal Decision-Making, client validation, and the full 90-trial profile. Schema 2 records game events and actual display metadata. Scoring is deterministic and timing uses browser software clocks. Correct withholding has null click latency and unavailable internal model timings remain unknown. Reports present the per-category outcomes and timings.
 
 ## Evidence on Hand
 
-The glossary, design, MVP specification, implementation plan, implemented game tests, and issues #1–#15. PR #19 is merged. No genuine external-agent evaluation has been validated. See [the plan](docs/plan.md).
+The glossary, design, MVP specification, implementation plan, game tests, and issues #1–#15 describe the benchmark. The #11 implementation is locally validated and awaits review. Genuine Codex and Claude runs remain unverified. See the [browser session guide](docs/browser-sessions.md) and [implementation plan](docs/plan.md).
 
 ## Product Principles
 

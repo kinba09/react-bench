@@ -8,7 +8,7 @@ import { createPlan, defaultConfig, validateConfig } from './registry.js';
 import { createRunReport } from './run-report.js';
 import { renderReport, writeReport } from './reporter.js';
 import { startServer } from './server.js';
-import type { AgentMetadata, BenchmarkConfig, BrowserDisplay, BrowserEvent, DynamicTrackingScenario, RunReport, Scenario, SessionCompletion, SessionView, TrialResult } from './types.js';
+import type { AgentMetadata, BenchmarkConfig, BrowserDisplay, BrowserEvent, DynamicTrackingScenario, InhibitoryControlScenario, RunReport, Scenario, SessionCompletion, SessionView, TrialResult } from './types.js';
 
 export interface SessionOptions {
   config?: BenchmarkConfig;
@@ -108,6 +108,39 @@ function validateTrackingTimeline(events: BrowserEvent[], scenario: DynamicTrack
   if (terminal.type === 'action-registered') validateTrackingClick(terminal, scenario);
 }
 
+function validateInhibitoryTimeline(events: BrowserEvent[], scenario: InhibitoryControlScenario): void {
+  const [prepared, started] = events;
+  const terminal = events.at(-1)!;
+  const phases = events.slice(2, -1);
+  const message = 'Trace does not match the Inhibitory Control cues.';
+  const plannedActivation = started!.atMs + scenario.initialDelayMs;
+  requireThat(prepared?.phase === 'prepared' && started?.phase === 'waiting'
+    && started.plannedActivationAtMs === plannedActivation, message);
+  let phase = 'waiting';
+  let stop: BrowserEvent | undefined;
+  if (phases.length) {
+    const activated = phases.shift()!;
+    requireThat(activated.type === 'activated' && activated.phase === 'active'
+      && activated.atMs >= plannedActivation && activated.plannedActivationAtMs === plannedActivation
+      && activated.deadlineAtMs === activated.atMs + scenario.responseWindowMs, message);
+    const plannedStop = scenario.condition === 'delayed-stop' ? activated.atMs + scenario.plannedStopDelayMs : undefined;
+    requireThat(activated.plannedStopAtMs === plannedStop, message);
+    if (phases.length) {
+      stop = phases.shift()!;
+      requireThat(plannedStop !== undefined && stop.type === 'stop-signal' && stop.phase === 'active'
+        && stop.plannedStopAtMs === plannedStop && stop.atMs >= plannedStop
+        && stop.atMs < activated.deadlineAtMs, message);
+    }
+    if (terminal.type === 'expired') requireThat(terminal.deadlineAtMs === activated.deadlineAtMs, message);
+    else requireThat(terminal.atMs < activated.deadlineAtMs, message);
+    phase = 'active';
+  }
+  requireThat(phases.length === 0 && terminal.phase === phase, message);
+  if (terminal.type === 'action-registered' && (scenario.condition === 'no-go' || stop)) {
+    requireThat(terminal.hit === false, 'Red cues cannot register a target hit.');
+  }
+}
+
 function completionFrom(body: Record<string, unknown>, scenario: Scenario): SessionCompletion {
   const trialId = scenario.id;
   requireThat(body.trialId === trialId, 'This is not the active trial.', 409);
@@ -118,7 +151,8 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
   for (const event of events) {
     requireThat(event && event.trialId === trialId && event.clock === 'browser-performance' && finite(event.atMs)
       && event.atMs >= previous && (['prepared', 'started', 'activated', 'action-registered', 'expired'].includes(event.type)
-        || (scenario.category === 'dynamic-tracking' && event.type === 'phase-transition')), 'Invalid trial event or clock.');
+        || (scenario.category === 'dynamic-tracking' && event.type === 'phase-transition')
+        || (scenario.category === 'inhibitory-control' && event.type === 'stop-signal')), 'Invalid trial event or clock.');
     requireThat(['prepared', 'waiting', 'active', 'complete'].includes(event.phase)
       || (scenario.category === 'dynamic-tracking' && (event.phase === 'watching' || event.phase === 'hidden')), 'Invalid event phase.');
     previous = event.atMs;
@@ -147,6 +181,7 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
     requireThat(active && last.atMs >= active.deadlineAtMs!, 'The response window has not expired.');
   }
   if (scenario.category === 'dynamic-tracking') validateTrackingTimeline(events, scenario);
+  if (scenario.category === 'inhibitory-control') validateInhibitoryTimeline(events, scenario);
   return { clientId: body.clientId as string, trialId, events: structuredClone(events),
     browserTimeOriginMs: body.browserTimeOriginMs, display: displayFrom(body.display) };
 }
@@ -154,9 +189,6 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
 /** Local, trusted browser session. Agents bring their own observation and input tools. */
 export async function startBrowserSession(options: SessionOptions) {
   const config = validateConfig(options.config ?? { ...defaultConfig, levels: [1], trialsPerLevel: 3 });
-  if (config.category === 'inhibitory-control') {
-    throw new Error('Browser sessions currently support Visual Reaction, Target Acquisition, and Dynamic Tracking.');
-  }
   for (const name of ['results.json', 'trials.jsonl', 'report.html']) {
     try { await access(join(options.outputDir, name)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
@@ -258,7 +290,8 @@ export async function startBrowserSession(options: SessionOptions) {
     }
     requireThat(state !== 'complete' && state !== 'cancelled', 'This session is closed.', 409);
     if (action === 'next') {
-      requireThat(state === 'between-trials' && performance.now() >= readyAfterMs, 'Finish pending actions before preparing the next trial.', 409);
+      requireThat(state === 'between-trials' && performance.now() >= readyAfterMs && body.actionsSettled === true,
+        'Confirm pending actions have finished before preparing the next trial.', 409);
       index++;
       state = 'ready';
     } else throw new RequestError(404, 'Unknown session action.');

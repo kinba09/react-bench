@@ -12,10 +12,11 @@ async function main(): Promise<void> {
     config: { type: 'string' }, output: { type: 'string' }, seed: { type: 'string' },
     headed: { type: 'boolean', default: false }, port: { type: 'string' }, help: { type: 'boolean' },
     'no-open': { type: 'boolean', default: false }, agent: { type: 'string' }, model: { type: 'string' }, tool: { type: 'string' },
+    client: { type: 'string' }, 'context-policy': { type: 'string' },
   } });
   const command = positionals[0];
   if (values.help || !command) {
-    console.log('ReactBench\n\n  session [--config file.json] [--seed seed] [--output directory] [--port 4173] [--no-open] [--agent name] [--model name] [--tool name]\n  run [--config file.json] [--seed seed] [--output directory] [--headed]\n  serve [--port 4173]\n\nSession opens a scored browser task for an agent using its own tools. Run uses a privileged offline oracle. Neither mode captures screenshots.');
+    console.log('ReactBench\n\n  session [--config file.json] [--seed seed] [--output directory] [--port 4173] [--no-open] [--agent name] [--model name] [--tool name] [--client name/version] [--context-policy description]\n  run [--config file.json] [--seed seed] [--output directory] [--headed]\n  serve [--port 4173]\n\nSession opens a scored browser task for an agent using its own tools. Run uses a privileged offline oracle. Neither mode captures screenshots.');
     return;
   }
   if (positionals.length !== 1) throw new Error('Provide one command: session, run, or serve.');
@@ -39,8 +40,9 @@ async function main(): Promise<void> {
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('port must be an integer from 0 to 65535.');
     const session = await startBrowserSession({ config, outputDir, port,
       agent: { name: values.agent ?? 'external-browser-agent', model: values.model ?? null, access: 'visual',
-        tool: values.tool ?? 'unspecified', contextPolicy: 'Managed by the external agent/operator; not reset by ReactBench.' } });
-    console.log(`ReactBench scored browser session: ${session.url}\n${config.trialsPerLevel} trials per level · agent uses its own tools · no screenshot capture\nResults: ${outputDir}`);
+        tool: values.tool ?? 'unspecified', client: values.client ?? 'unspecified',
+        contextPolicy: values['context-policy'] ?? 'Managed by the external agent/operator; not reset by ReactBench.' } });
+    console.log(`ReactBench scored browser session: ${session.url}\n${config.trialsPerLevel} ${config.category === 'inhibitory-control' ? 'repetitions per condition per level' : 'trials per level'} · agent uses its own tools · no screenshot capture\nResults: ${outputDir}`);
     const stop = () => { void session.cancel().then(() => session.close()).then(() => process.exit(0)).catch(error => {
       console.error(`Could not save partial results: ${error instanceof Error ? error.message : String(error)}`);
       process.exitCode = 1;

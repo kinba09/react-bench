@@ -38,6 +38,7 @@ form[hidden] { display: none; }
 .session-heading span { color: var(--muted); font-size: 12px; }
 .session-controls p { max-width: 75ch; color: var(--muted); font-size: 13px; margin: 8px 0 14px; }
 .session-actions, #session-downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.session-quiescence { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 13px; }
 #session-downloads { margin-top: 16px; font-size: 13px; }
 button.secondary { color: var(--ink); background: var(--surface); border-color: var(--line); }
 button.secondary:hover { background: var(--ground); }

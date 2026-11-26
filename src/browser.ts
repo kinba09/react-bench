@@ -38,6 +38,7 @@ let deadline = 0;
 let animation = 0;
 let keepTargetsHiddenAfterFinish = false;
 let trialComplete: (() => void) | undefined;
+let pointerTrialId: string | undefined;
 
 function reflectedPosition(value: number, minimum: number, maximum: number): number {
   const span = maximum - minimum;
@@ -365,6 +366,7 @@ function describeTask(category: Category, responseWindowMs: number): void {
 
 const environment: BrowserEnvironment = {
   prepare(next, index, total) {
+    pointerTrialId = undefined;
     cancelAnimationFrame(animation);
     scenario = next;
     phase = 'prepared';
@@ -441,6 +443,7 @@ const environment: BrowserEnvironment = {
       ...(scenario.category === 'inhibitory-control' ? { condition: scenario.condition } : {}), events });
   },
   cancel() {
+    pointerTrialId = undefined;
     cancelAnimationFrame(animation);
     phase = 'complete';
     phaseCountdown.hidden = true;
@@ -448,7 +451,15 @@ const environment: BrowserEnvironment = {
   },
 };
 if (!sessionMode) window.reactBenchEnvironment = environment;
+document.addEventListener('pointerdown', event => {
+  pointerTrialId = !(event.target as Element).closest('[data-control]')
+    && (phase === 'waiting' || phase === 'watching' || phase === 'hidden' || phase === 'active') ? scenario.id : undefined;
+});
 document.addEventListener('click', event => {
+  const originatingTrial = pointerTrialId;
+  pointerTrialId = undefined;
+  // A release from a gesture begun before this running trial cannot score it.
+  if (sessionMode && originatingTrial !== scenario.id) return;
   const prematureDynamicPhase = scenario.category === 'dynamic-tracking'
     && (phase === 'waiting' || phase === 'watching' || phase === 'hidden');
   if ((event.target as Element).closest('[data-control]') || (phase !== 'waiting' && phase !== 'watching' && phase !== 'hidden' && phase !== 'active')) return;

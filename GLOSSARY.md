@@ -80,7 +80,7 @@ _Avoid_: isolated model speed as a description of whole-agent results.
 
 ## Browser evaluation session
 
-A scored run of seeded trials in a browser, with on-page instructions, readiness, trial progression, event collection, completion, and result export. The agent operates the page through its own tools. Visual Reaction, Target Acquisition, and Dynamic Tracking implement this flow.
+A scored run of seeded trials in a browser, with on-page instructions, readiness, trial progression, event collection, completion, and result export. The agent operates the page through its own tools. Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control implement this flow.
 
 ## Session controller
 

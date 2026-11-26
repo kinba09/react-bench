@@ -8,6 +8,8 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
   const message = document.querySelector<HTMLElement>('#session-message')!;
   const start = document.querySelector<HTMLButtonElement>('#session-start')!;
   const next = document.querySelector<HTMLButtonElement>('#session-next')!;
+  const quiescence = document.querySelector<HTMLElement>('#session-quiescence')!;
+  const actionsSettled = document.querySelector<HTMLInputElement>('#session-actions-settled')!;
   const cancel = document.querySelector<HTMLButtonElement>('#session-cancel')!;
   const retry = document.querySelector<HTMLButtonElement>('#session-retry')!;
   const links = document.querySelector<HTMLElement>('#session-downloads')!;
@@ -22,6 +24,7 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
   let pendingCancellation = false;
   let hasPreparedTrial = false;
   let trialDisplay = display();
+  let nextPauseFinished = false;
   controls.hidden = false;
   arena.hidden = true;
   document.querySelector<HTMLElement>('#mode')!.textContent = 'Scored browser session';
@@ -29,11 +32,20 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
   links.querySelectorAll<HTMLAnchorElement>('a').forEach(link => { link.href = `${api}/${link.dataset.file}`; });
 
   async function request(action: string, body: Record<string, unknown> = {}): Promise<SessionView> {
-    const response = await fetch(`${api}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId, ...body }) });
-    const value = await response.json();
-    if (!response.ok) throw new Error(value.error ?? 'Session request failed.');
-    return value as SessionView;
+    cancel.disabled = true;
+    retry.disabled = true;
+    actionsSettled.disabled = true;
+    try {
+      const response = await fetch(`${api}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, ...body }) });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? 'Session request failed.');
+      return value as SessionView;
+    } finally {
+      cancel.disabled = false;
+      retry.disabled = false;
+      actionsSettled.disabled = false;
+    }
   }
   function show(view: SessionView) {
     current = view;
@@ -43,6 +55,9 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
     start.textContent = `Start trial ${view.index}`;
     next.hidden = view.state !== 'between-trials';
     next.disabled = true;
+    nextPauseFinished = false;
+    actionsSettled.checked = false;
+    quiescence.hidden = view.state !== 'between-trials';
     cancel.hidden = view.state === 'complete' || view.state === 'cancelled';
     retry.hidden = true;
     if (!hasPreparedTrial && view.state !== 'ready') describeTask(view.category, view.responseWindowMs);
@@ -57,7 +72,12 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
         document.querySelector<HTMLElement>('#instruction')!.textContent = 'Prepare the next trial when you are ready.';
       }
       message.textContent = `Trial ${view.index} recorded. Finish any pending actions, then prepare the next trial. Its clock will wait for Start.`;
-      setTimeout(() => { if (current.state === 'between-trials') next.disabled = false; }, 550);
+      setTimeout(() => {
+        if (current === view && current.state === 'between-trials' && !pendingCancellation) {
+          nextPauseFinished = true;
+          next.disabled = !actionsSettled.checked;
+        }
+      }, 550);
     } else if (view.state === 'complete' || view.state === 'cancelled') {
       if (hasPreparedTrial) environment.cancel();
       start.hidden = true;
@@ -76,6 +96,7 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
     retry.hidden = false;
     start.disabled = true;
     next.disabled = true;
+    nextPauseFinished = false;
   }
   async function submitCompletion() {
     start.disabled = true;
@@ -110,17 +131,26 @@ export async function connectSession(environment: BrowserEnvironment, describeTa
     finally { cancel.disabled = false; }
   });
   next.addEventListener('click', async () => {
+    if (next.disabled || !actionsSettled.checked) return;
     next.disabled = true;
+    cancel.disabled = true;
     message.textContent = 'Preparing next trial…';
-    try { show(await request('next')); } catch (error) { failed(error); }
+    try { show(await request('next', { actionsSettled: true })); } catch (error) { failed(error); }
+    finally { cancel.disabled = false; }
+  });
+  actionsSettled.addEventListener('change', () => {
+    next.disabled = current.state !== 'between-trials' || !nextPauseFinished || !actionsSettled.checked;
   });
   cancel.addEventListener('click', async () => {
     cancel.disabled = true;
+    start.disabled = true;
+    next.disabled = true;
+    actionsSettled.disabled = true;
     pendingCancellation = true;
     message.textContent = 'Cancelling session…';
     if (hasPreparedTrial) environment.cancel();
     try { show(await request('cancel', { display: display() })); pendingCancellation = false; } catch (error) { failed(error); }
-    finally { cancel.disabled = false; }
+    finally { cancel.disabled = false; actionsSettled.disabled = false; }
   });
   async function connect() {
     message.textContent = 'Connecting to the session…';
