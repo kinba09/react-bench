@@ -8,7 +8,7 @@ import { createPlan, defaultConfig, validateConfig } from './registry.js';
 import { createRunReport } from './run-report.js';
 import { renderReport, writeReport } from './reporter.js';
 import { startServer } from './server.js';
-import type { AgentMetadata, BenchmarkConfig, BrowserDisplay, BrowserEvent, RunReport, Scenario, SessionCompletion, SessionView, TrialResult } from './types.js';
+import type { AgentMetadata, BenchmarkConfig, BrowserDisplay, BrowserEvent, DynamicTrackingScenario, RunReport, Scenario, SessionCompletion, SessionView, TrialResult } from './types.js';
 
 export interface SessionOptions {
   config?: BenchmarkConfig;
@@ -49,6 +49,65 @@ async function readBody(request: IncomingMessage): Promise<Record<string, unknow
   return value as Record<string, unknown>;
 }
 
+function validateTrackingClick(click: BrowserEvent, scenario: DynamicTrackingScenario): void {
+  const objects = click.objects;
+  requireThat(click.requiredTargetId === scenario.requiredTargetId && Array.isArray(objects), 'Missing moving-field evidence.');
+  if (click.phase !== 'active') {
+    requireThat(objects.length === 0 && click.clickedObjectId === null && click.hit === false,
+      'Premature clicks cannot hit moving objects.');
+    return;
+  }
+  requireThat(objects.length === scenario.objects.length && objects.every((object, index) => {
+    const expected = scenario.objects[index]!;
+    return object && object.id === expected.id && object.role === expected.role && object.radius === expected.radius
+      && Number.isFinite(object.x) && Number.isFinite(object.y);
+  }), 'Moving-field evidence does not match the seeded objects.');
+  const clicked = objects.find(object => Math.hypot(click.x! - object.x, click.y! - object.y) <= object.radius);
+  requireThat(click.clickedObjectId === (clicked?.id ?? null) && click.hit === (clicked?.id === scenario.requiredTargetId),
+    'Click evidence does not match the moving field.');
+}
+
+function validateTrackingTimeline(events: BrowserEvent[], scenario: DynamicTrackingScenario): void {
+  const [prepared, started] = events;
+  const terminal = events.at(-1)!;
+  const phases = events.slice(2, -1);
+  const occluded = scenario.watchDurationMs > 0;
+  const message = 'Trace does not match the Dynamic Tracking phases.';
+  let phase = occluded ? 'watching' : 'waiting';
+  let activationNotBefore = started!.atMs + scenario.initialDelayMs;
+  if (occluded) activationNotBefore = started!.atMs + scenario.watchDurationMs + scenario.hiddenDurationMs;
+  requireThat(prepared?.phase === 'prepared' && started?.phase === phase && started.plannedActivationAtMs === activationNotBefore, message);
+
+  if (occluded) {
+    const watchDeadline = started.atMs + scenario.watchDurationMs;
+    requireThat(started.phaseDeadlineAtMs === watchDeadline, message);
+    if (phases.length) {
+      const hidden = phases.shift()!;
+      requireThat(hidden.type === 'phase-transition' && hidden.phase === 'hidden' && hidden.atMs >= watchDeadline
+        && hidden.phaseDeadlineAtMs === hidden.atMs + scenario.hiddenDurationMs, message);
+      activationNotBefore = hidden.phaseDeadlineAtMs;
+      phase = 'hidden';
+    }
+  }
+
+  if (phases.length) {
+    const reappearance = occluded ? phases.shift() : undefined;
+    const activated = phases.shift();
+    requireThat(activated?.type === 'activated' && activated.phase === 'active'
+      && activated.atMs >= activationNotBefore && activated.plannedActivationAtMs === started.plannedActivationAtMs
+      && activated.deadlineAtMs === activated.atMs + scenario.clickWindowMs, message);
+    if (occluded) {
+      requireThat(reappearance?.type === 'phase-transition' && reappearance.phase === 'active'
+        && reappearance.atMs === activated.atMs && reappearance.phaseDeadlineAtMs === activated.deadlineAtMs, message);
+    }
+    phase = 'active';
+    if (terminal.type === 'expired') requireThat(terminal.deadlineAtMs === activated.deadlineAtMs, message);
+    else requireThat(terminal.atMs < activated.deadlineAtMs, message);
+  }
+  requireThat(phases.length === 0 && terminal.phase === phase, message);
+  if (terminal.type === 'action-registered') validateTrackingClick(terminal, scenario);
+}
+
 function completionFrom(body: Record<string, unknown>, scenario: Scenario): SessionCompletion {
   const trialId = scenario.id;
   requireThat(body.trialId === trialId, 'This is not the active trial.', 409);
@@ -58,8 +117,10 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
   let previous = -1;
   for (const event of events) {
     requireThat(event && event.trialId === trialId && event.clock === 'browser-performance' && finite(event.atMs)
-      && event.atMs >= previous && ['prepared', 'started', 'activated', 'action-registered', 'expired'].includes(event.type), 'Invalid trial event or clock.');
-    requireThat(['prepared', 'waiting', 'active', 'complete'].includes(event.phase), 'Invalid event phase.');
+      && event.atMs >= previous && (['prepared', 'started', 'activated', 'action-registered', 'expired'].includes(event.type)
+        || (scenario.category === 'dynamic-tracking' && event.type === 'phase-transition')), 'Invalid trial event or clock.');
+    requireThat(['prepared', 'waiting', 'active', 'complete'].includes(event.phase)
+      || (scenario.category === 'dynamic-tracking' && (event.phase === 'watching' || event.phase === 'hidden')), 'Invalid event phase.');
     previous = event.atMs;
     if (event.type === 'action-registered') {
       requireThat(finite(event.x) && finite(event.y)
@@ -85,6 +146,7 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
     const active = events.find(event => event.type === 'activated');
     requireThat(active && last.atMs >= active.deadlineAtMs!, 'The response window has not expired.');
   }
+  if (scenario.category === 'dynamic-tracking') validateTrackingTimeline(events, scenario);
   return { clientId: body.clientId as string, trialId, events: structuredClone(events),
     browserTimeOriginMs: body.browserTimeOriginMs, display: displayFrom(body.display) };
 }
@@ -92,8 +154,8 @@ function completionFrom(body: Record<string, unknown>, scenario: Scenario): Sess
 /** Local, trusted browser session. Agents bring their own observation and input tools. */
 export async function startBrowserSession(options: SessionOptions) {
   const config = validateConfig(options.config ?? { ...defaultConfig, levels: [1], trialsPerLevel: 3 });
-  if (config.category !== 'visual-reaction' && config.category !== 'target-acquisition') {
-    throw new Error('Browser sessions currently support Visual Reaction and Target Acquisition.');
+  if (config.category === 'inhibitory-control') {
+    throw new Error('Browser sessions currently support Visual Reaction, Target Acquisition, and Dynamic Tracking.');
   }
   for (const name of ['results.json', 'trials.jsonl', 'report.html']) {
     try { await access(join(options.outputDir, name)); }

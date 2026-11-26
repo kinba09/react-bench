@@ -8,7 +8,7 @@ Researchers and agent developers need to understand how accurately, quickly, and
 
 They need a reproducible local benchmark that measures the complete perception, decision, and action loop, supports different clients and model providers, and makes its measurement limits visible. Users should be able to evaluate subscription clients, API-backed agents, and locally hosted agents through comparable observation and action rules without requiring a particular commercial account.
 
-Current implementation includes browser practice, Visual Reaction, Target Acquisition, all five Dynamic Tracking levels, Inhibitory Control go/no-go, and privileged offline oracle reports. Visual Reaction and Target Acquisition support scored browser sessions with visible readiness, native-tool input, cancellation, and exports. The default is three seeded level-1 Visual Reaction trials. Continuous screenshot capture has been removed from session and oracle execution. Other-game sessions and genuine client validation remain in #10/#11 and #12/#13.
+Current implementation includes browser practice, Visual Reaction, Target Acquisition, all five Dynamic Tracking levels, Inhibitory Control go/no-go, and privileged offline oracle reports. Visual Reaction, Target Acquisition, and Dynamic Tracking support scored browser sessions with visible readiness, native-tool input, cancellation, and exports. The default is three seeded level-1 Visual Reaction trials. Continuous screenshot capture has been removed from session and oracle execution. Other-game sessions and genuine client validation remain in #10/#11 and #12/#13.
 
 ## Solution
 
