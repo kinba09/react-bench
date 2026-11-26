@@ -3,8 +3,9 @@ export type DynamicTrackingLevel = 1 | 2 | 3 | 4 | 5;
 export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking' | 'inhibitory-control';
 export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
-export type InhibitoryControlCondition = 'go' | 'no-go';
-export type InhibitoryControlOutcome = 'go-response' | 'go-omission' | 'go-wrong-click' | 'go-premature-click' | 'forbidden-click' | 'withheld';
+export type InhibitoryControlCondition = 'go' | 'no-go' | 'delayed-stop';
+export type InhibitoryControlOutcome = 'go-response' | 'go-omission' | 'go-wrong-click' | 'go-premature-click'
+  | 'forbidden-click' | 'withheld' | 'pre-stop-click' | 'post-stop-click' | 'stop-withheld';
 
 interface SharedConfig {
   seed: string;
@@ -28,6 +29,7 @@ export interface DynamicTrackingConfig extends SharedConfig {
 }
 export interface InhibitoryControlConfig extends SharedConfig {
   category: 'inhibitory-control';
+  conditions?: InhibitoryControlCondition[];
   initialDelayMs: [number, number];
   responseWindowsMs: [number, number, number, number, number];
 }
@@ -74,17 +76,19 @@ export interface DynamicTrackingScenario {
   requiredTargetId: string;
   objects: MovingObject[];
 }
-export interface InhibitoryControlScenario extends SharedScenario {
+export type InhibitoryControlScenario = SharedScenario & {
   category: 'inhibitory-control';
   initialDelayMs: number;
-  condition: InhibitoryControlCondition;
   target: { u: number; v: number; radius: number };
-}
+} & (
+  | { condition: 'go' | 'no-go' }
+  | { condition: 'delayed-stop'; nominalStopDelayMs: number; plannedStopDelayMs: number }
+);
 export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario | InhibitoryControlScenario;
 export interface AcquisitionObjectState { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }
 
 export type TrialPhase = 'prepared' | 'waiting' | 'watching' | 'hidden' | 'active' | 'complete';
-export type BrowserEventType = 'prepared' | 'started' | 'phase-transition' | 'activated' | 'action-registered' | 'expired';
+export type BrowserEventType = 'prepared' | 'started' | 'phase-transition' | 'activated' | 'stop-signal' | 'action-registered' | 'expired';
 export interface MovingTargetState {
   id: string;
   role: MovingObject['role'];
@@ -99,6 +103,7 @@ export interface BrowserEvent {
   clock: 'browser-performance';
   phase: TrialPhase;
   plannedActivationAtMs?: number;
+  plannedStopAtMs?: number;
   phaseDeadlineAtMs?: number;
   deadlineAtMs?: number;
   x?: number;

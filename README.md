@@ -6,11 +6,11 @@ A local benchmark for evaluating how accurately and quickly computer-use agents 
 
 ReactBench runs the benchmark game in a browser. An evaluated agent opens or attaches to that browser using its own browser/computer tools, reads the on-page instructions, and plays. The agent owns observation and input, including any screenshots it chooses to take. ReactBench records game events, input registration, deadlines, outcomes, and scores; it does not supply screenshots, continuously capture frames, or require a custom screenshot/action bridge in the intended evaluation flow.
 
-**Implementation status:** Visual Reaction and Target Acquisition support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. Dynamic Tracking and Inhibitory Control currently run in practice or through the privileged offline oracle. Neither session nor oracle execution captures screenshots. Genuine Codex/Claude runs remain unvalidated.
+**Implementation status:** Visual Reaction, Target Acquisition, and Dynamic Tracking support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. Inhibitory Control currently runs in practice or through the privileged offline oracle. Neither session nor oracle execution captures screenshots. Genuine Codex/Claude runs remain unvalidated.
 
 See the [implementation plan](docs/plan.md) for priorities and parallel work.
 
-**Implemented:** Visual Reaction, Target Acquisition, and Dynamic Tracking (five levels each), plus Inhibitory Control go/no-go (five levels), with seeded trials, a privileged Playwright oracle, browser-clock grading, and local JSON/JSONL/HTML results. Other games and Codex/Claude integrations are tracked separately.
+**Implemented:** Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control (five levels each), with seeded trials, a privileged Playwright oracle, browser-clock grading, and local JSON/JSONL/HTML results. Inhibitory Control includes go, no-go, and delayed-stop.
 
 ## Setup
 
@@ -38,9 +38,12 @@ npm run session -- --seed experiment-a --output results/session-a --agent my-age
 npm run session -- --no-open --port 0
 npm run session -- --config configs/browser-session.json
 npm run session -- --config configs/target-acquisition.json
+npm run session -- --config configs/dynamic-tracking.json
 ```
 
 The Target Acquisition example runs three seeded trials at each of five levels. The page shows the reference symbol during preparation, then reveals the board after the seeded wait. The agent has ten seconds to click the matching object. The first click ends the trial.
+
+The Dynamic Tracking example runs three seeded trials at each of five levels. At levels 4 and 5, wait through Watch and Hidden, then click the star after it reappears. Earlier clicks end the trial as premature. Reports retain the browser phase events and measure successful reaction time from reappearance.
 
 `--no-open` prints the URL for an agent that opens its own browser; `--port 0` selects an available port. Opening the page does not claim the session: the first participant to press Start claims it. Use that same tab for the rest of the run. Reloading during an active trial cannot restart or recover it; cancel and create a new session. The server stays available for report downloads until Ctrl+C. **Cancel session** saves an incomplete report containing finished trials only.
 
@@ -72,13 +75,15 @@ npm run benchmark -- --headed
 
 Choose a new output directory for each run; existing result files are never overwritten. The initial configuration has response windows of 5, 4, 3, 2, and 1 seconds and a seeded initial wait of 1–4 seconds. All durations are real elapsed time; CI does not freeze or accelerate the benchmark clock.
 
+Inhibitory Control defaults to 15 trials, with one go, one no-go, and one delayed-stop trial per level. In this category, `trialsPerLevel` sets repetitions per condition. Set `"conditions": ["go", "no-go"]` in the configuration for a go/no-go-only run. With delayed-stop enabled, each selected level's response window must exceed the maximum sampled delay.
+
 ## Try the game
 
 ```sh
 npm run dev
 ```
 
-Open the printed local address, choose a game and level, and press **Start trial**. Visual Reaction asks you to click the target after it turns green. Target Acquisition asks you to match a reference shape among 6, 16, 36, 64, or 100 static objects. Every board uses a 26 CSS-pixel object diameter and a ten-second response limit. The first click ends the attempt: a wrong choice fails and cannot be rescued by another click. Dynamic Tracking asks you to click the moving star among 1, 5, 15, 30, or 60 objects; all objects use a 24-pixel radius and a constant 150-pixel-per-second speed. Levels 4 and 5 add a 1.5-second Watch phase and a 1- or 2-second Hidden phase; the ten-second click window starts when the target reappears. Inhibitory Control asks you to click the green cue once and withhold from the red cue until its 5, 4, 3, 2, or 1-second window ends. Practice is interactive and does not create an evaluated-agent report.
+Open the printed local address, choose a game and level, and press **Start trial**. Visual Reaction asks you to click the target after it turns green. Target Acquisition asks you to match a reference shape among 6, 16, 36, 64, or 100 static objects. Every board uses a 26 CSS-pixel object diameter and a ten-second response limit. The first click ends the attempt: a wrong choice fails and cannot be rescued by another click. Dynamic Tracking asks you to click the moving star among 1, 5, 15, 30, or 60 objects; all objects use a 24-pixel radius and a constant 150-pixel-per-second speed. Levels 4 and 5 add a 1.5-second Watch phase and a 1- or 2-second Hidden phase; the ten-second click window starts when the target reappears. Inhibitory Control asks you to click once on go and withhold throughout no-go and delayed-stop trials. A delayed-stop trial starts green and switches to a red stop cue. The first click ends the trial and the report distinguishes pre-stop from post-stop clicks. Practice is interactive and does not create an evaluated-agent report.
 
 ## Measurements and reproducibility
 
@@ -109,7 +114,7 @@ Tests exercise real Chromium through the public runner-to-report boundary: defau
 - [Design specification](docs/design.md): six game categories, five difficulty levels, initial timing settings, scoring rules, and agent integration plans.
 - [Domain glossary](GLOSSARY.md): agreed project terminology.
 
-The broader MVP design covers 90 trials: six categories × five levels × three trials. Issues #2–#5 implement Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels. Issue #6 adds Inhibitory Control go/no-go, currently one go and one no-go trial per level; delayed-stop trials and the remaining categories are separate work.
+The broader MVP design covers 90 trials: six categories × five levels × three trials. Issues #2–#5 implement Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels. Issues #6 and #7 implement Inhibitory Control go, no-go, and delayed-stop for practice and the offline oracle.
 
 Planned integrations let Codex CLI, Claude Code, and custom API-backed, local, or existing computer-use agents operate the benchmark browser with their own tools. Optional launch helpers manage setup and lifecycle; ReactBench does not provide their screenshot or action tools. The privileged scripted oracle supports the current offline slice and remains separate from evaluated visual-agent results.
 

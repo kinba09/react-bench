@@ -4,13 +4,14 @@
 
 ReactBench opens or serves a benchmark game in a browser. Agents work on that page through their own browser/computer tools. ReactBench owns rules, seeded scheduling, deadlines, browser-registered events, deterministic grading, and exports. Agents own observation and task input. Remove the benchmark-owned screenshot feed, continuous sampler requirement, fixed screenshot cadence, and mandatory screenshot/action MCP bridge from external-agent evaluation.
 
-Visual Reaction and Target Acquisition support scored browser sessions with explicit preparation and start controls, native-tool input, cancellation, and result exports. Continuous screenshot capture has been removed from both sessions and the separately labelled offline oracle.
+Visual Reaction, Target Acquisition, and Dynamic Tracking support scored browser sessions with explicit preparation and start controls, native-tool input, cancellation, and result exports. Continuous screenshot capture has been removed from both sessions and the separately labelled offline oracle.
 
 ## First slice delivered
 
 - `npm run session` opens the scored page; `--no-open` supports agents that open their own browser.
 - Three seeded Visual Reaction trials at level 1 by default. Browser-event clocks drive scoring; agent input bypasses internal adapters.
 - Target Acquisition sessions use the existing five levels and seeded boards. The report records each level's object count, outcomes, and reaction latency for successful picks.
+- Dynamic Tracking sessions use all five levels. At levels 4 and 5, the report records Watch, Hidden, and Click phases and measures reaction latency from reappearance.
 - The participant claims the session on Start. Preparation, active trial, completion, and cancellation have distinct behavior. Inter-trial preparation does not start deadlines.
 - Completed traces are submitted once, retries are idempotent, and export failures offer Retry. Cancellation writes an explicitly incomplete report.
 - Schema 2 removes required screenshots/capture cadence. Actual per-trial display settings are exported; native-tool dispatch/model timing is not invented.
@@ -18,10 +19,12 @@ Visual Reaction and Target Acquisition support scored browser sessions with expl
 
 ## Next priorities
 
-1. **Extend browser evaluation sessions — [#11](https://github.com/kinba09/react-bench/issues/11).** Add Dynamic Tracking and Inhibitory Control to scored browser sessions, including their phase transitions and outcome evidence. Verify readiness, cancellation, and exports through agents' own browser tools.
+1. **Extend browser evaluation sessions — [#11](https://github.com/kinba09/react-bench/issues/11).** Add Inhibitory Control to scored browser sessions, including its phase transitions and outcome evidence. Verify readiness, cancellation, and exports through agents' own browser tools.
 2. **Runtime migration and timing validation — [#10](https://github.com/kinba09/react-bench/issues/10).** Capture and screenshot configuration removal are delivered. Expand slow-agent, cancellation, display-profile, and lifecycle validation around the native session path; preserve honest timing and historical report distinctions. Validate real-time deadlines, slow participants, trial transitions, and clock provenance. Preserve the offline oracle and clearly distinguish any historical sampler fields.
-3. **Complete game coverage — [#7](https://github.com/kinba09/react-bench/issues/7), [#8](https://github.com/kinba09/react-bench/issues/8), [#9](https://github.com/kinba09/react-bench/issues/9).** Finish delayed-stop, Multi-Step Reaction, and Temporal Decision-Making with the agreed rules and browser-event metrics. Integrate with sessions without introducing image delivery or external-action routing.
+3. **Complete game coverage — [#8](https://github.com/kinba09/react-bench/issues/8) and [#9](https://github.com/kinba09/react-bench/issues/9).** Add Multi-Step Reaction and Temporal Decision-Making with their browser-event metrics. Delayed-stop [#7](https://github.com/kinba09/react-bench/issues/7) works in practice and the offline oracle. Scored browser sessions for Inhibitory Control are tracked in #11.
 4. **Validate real clients — [#12](https://github.com/kinba09/react-bench/issues/12) and [#13](https://github.com/kinba09/react-bench/issues/13).** Demonstrate Codex CLI and Claude Code playing through their own browser/computer tools. Document supported connection, authentication, reset, and cancellation setup. Claim support only after genuine evidence; missing tools/access must be reported explicitly.
+
+   The local Codex CLI smoke attempt authenticated and reached its configured tools, but browser transport and native-app permissions failed before Start. See [the recorded evidence and repeat procedure](codex-cli-smoke.md).
 5. **Reports and complete profile — [#14](https://github.com/kinba09/react-bench/issues/14), [#15](https://github.com/kinba09/react-bench/issues/15).** Compare labelled complete agent setups, keep unknown tool timings unavailable, and validate six categories × five levels × three trials. Preserve the credential-free oracle profile and add browser-session export coverage.
 
 PR #19 is merged; waiting on it is no longer a dependency.
@@ -32,7 +35,7 @@ Agree on the session/trial lifecycle and event/result schema before concurrent i
 
 - **Session work (#11)** owns browser access, participant controls, trial progression, event collection, and export integration.
 - **Migration/validation work (#10)** can proceed alongside #11 once that contract is agreed. Coordinate changes to runner/types and existing tests; assign ownership of shared edits rather than independently redesigning interfaces.
-- **Game work (#7, then #8/#9)** can proceed alongside sessions. Game changes own scenarios, rendering, events, and grading. Coordinate shared type and report changes; separate branches/worktrees do not eliminate merge conflicts.
+- **Game work (#8/#9)** can proceed alongside sessions. Game changes own scenarios, rendering, events, and grading. Coordinate shared type and report changes; separate branches/worktrees do not eliminate merge conflicts.
 - **Codex and Claude work (#12/#13)** can proceed in parallel after the session path works and #10 validates the lifecycle. Setup research can happen earlier, but no screenshot/action bridge should be built as a prerequisite.
 - **Reports (#14)** can use agreed event/result fixtures while sessions and categories are implemented. The complete integration check (#15) follows all six games and the session/export work; genuine paid-client access is not a prerequisite for offline validation.
 
@@ -48,4 +51,4 @@ Agree on the session/trial lifecycle and event/result schema before concurrent i
 
 ## Scope of this update
 
-The Visual Reaction and Target Acquisition browser sessions and capture removal are implemented. Dynamic Tracking and Inhibitory Control sessions, broader slow-agent validation, and client examples remain in #10/#11. Active-trial page reload cannot recover its unfinished trace; cancel and start a new run. Genuine Codex and Claude runs and the full 90-trial profile remain follow-up work.
+The Visual Reaction, Target Acquisition, and Dynamic Tracking browser sessions and capture removal are implemented. Inhibitory Control sessions, broader slow-agent validation, and client examples remain in #10/#11. Active-trial page reload cannot recover its unfinished trace; cancel and start a new run. Genuine Codex and Claude runs and the full 90-trial profile remain follow-up work.
