@@ -9,6 +9,22 @@ export interface GradeResult {
 export function grade(events: BrowserEvent[], scenario?: Scenario): GradeResult {
   const activation = events.find(event => event.type === 'activated');
   const click = events.find(event => event.type === 'action-registered');
+  if (scenario?.category === 'inhibitory-control' && scenario.condition === 'delayed-stop') {
+    const signal = events.find(event => event.type === 'stop-signal');
+    const expiration = events.find(event => event.type === 'expired');
+    if (click && (!activation || click.atMs < activation.atMs)) {
+      return { outcome: 'premature', reactionLatencyMs: null, conditionOutcome: 'pre-stop-click' };
+    }
+    const deadline = activation?.deadlineAtMs;
+    if (click && deadline !== undefined && click.atMs < deadline) {
+      return { outcome: 'wrong', reactionLatencyMs: null,
+        conditionOutcome: signal && click.atMs >= signal.atMs ? 'post-stop-click' : 'pre-stop-click' };
+    }
+    if (deadline !== undefined && ((expiration && expiration.atMs >= deadline) || (click && click.atMs >= deadline))) {
+      return { outcome: 'success', reactionLatencyMs: null, conditionOutcome: 'stop-withheld' };
+    }
+    return { outcome: 'expired', reactionLatencyMs: null };
+  }
   if (scenario?.category === 'inhibitory-control') return gradeInhibitoryControl(scenario, activation, click);
   if (!click) return { outcome: 'expired', reactionLatencyMs: null };
   if (!activation || click.atMs < activation.atMs) return { outcome: 'premature', reactionLatencyMs: null };

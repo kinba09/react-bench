@@ -1,4 +1,4 @@
-import type { BenchmarkConfig, Category, DynamicTrackingConfig, DynamicTrackingLevel, InhibitoryControlConfig, InhibitoryControlCondition, Level, MovingObject, Scenario, TargetAcquisitionConfig, TargetSymbol, VisualReactionConfig } from './types.js';
+import type { BenchmarkConfig, Category, DynamicTrackingConfig, DynamicTrackingLevel, InhibitoryControlConfig, InhibitoryControlCondition, InhibitoryControlScenario, Level, MovingObject, Scenario, TargetAcquisitionConfig, TargetSymbol, VisualReactionConfig } from './types.js';
 
 export const defaultConfig: VisualReactionConfig = {
   category: 'visual-reaction', seed: 'reactbench-v1', levels: [1, 2, 3, 4, 5],
@@ -19,6 +19,8 @@ export const defaultInhibitoryControlConfig: InhibitoryControlConfig = {
   trialsPerLevel: 1, initialDelayMs: [1000, 4000],
   responseWindowsMs: [5000, 4000, 3000, 2000, 1000],
 };
+export const inhibitoryControlConditions = ['go', 'no-go', 'delayed-stop'] as const satisfies readonly InhibitoryControlCondition[];
+const nominalStopDelaysMs: Record<Level, number> = { 1: 100, 2: 250, 3: 400, 4: 550, 5: 700 };
 export const dynamicTrackingTargetRadiusPx = 24;
 export const dynamicTrackingSpeedPxPerSecond = 150;
 export const dynamicTrackingReferenceBandPx = 68;
@@ -43,7 +45,7 @@ export const dynamicTracking = {
 export const inhibitoryControl = {
   id: 'inhibitory-control' as const,
   title: 'Inhibitory Control',
-  instructions: 'Respond to green cues with one click. Withhold all clicks while a red cue is shown.',
+  instructions: 'Click once on green and withhold on red. Some trials start green and switch to a red stop cue. On those trials, withhold for the entire response window.',
 };
 export const taskRegistry = {
   'visual-reaction': visualReaction,
@@ -90,7 +92,8 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   const category = config.category;
   if (category !== 'visual-reaction' && category !== 'target-acquisition' && category !== 'dynamic-tracking' && category !== 'inhibitory-control') throw new Error('category must be visual-reaction, target-acquisition, dynamic-tracking, or inhibitory-control.');
   const keys = ['category', 'seed', 'levels', 'trialsPerLevel',
-    'initialDelayMs', ...(category === 'visual-reaction' || category === 'inhibitory-control' ? ['responseWindowsMs'] : category === 'dynamic-tracking' ? ['clickWindowMs'] : [])];
+    'initialDelayMs', ...(category === 'visual-reaction' || category === 'inhibitory-control' ? ['responseWindowsMs'] : category === 'dynamic-tracking' ? ['clickWindowMs'] : []),
+    ...(category === 'inhibitory-control' ? ['conditions'] : [])];
   for (const key of Object.keys(config)) if (!keys.includes(key)) throw new Error(`Unknown configuration option: ${key}`);
   if (typeof config.seed !== 'string' || !config.seed.length || config.seed.length > 200) throw new Error('seed must be a nonempty string of at most 200 characters.');
   const levels = config.levels;
@@ -104,6 +107,20 @@ export function validateConfig(input: unknown): BenchmarkConfig {
   if (category === 'visual-reaction' || category === 'inhibitory-control') {
     const windows = config.responseWindowsMs;
     if (!Array.isArray(windows) || windows.length !== 5 || windows.some(x => !Number.isFinite(x) || x < 100 || x > 60_000)) throw new Error('responseWindowsMs must contain five durations between 100 and 60000 milliseconds.');
+    if (category === 'inhibitory-control') {
+      const conditions = config.conditions === undefined ? inhibitoryControlConditions : config.conditions;
+      if (!Array.isArray(conditions) || !conditions.length || conditions.some(condition => !inhibitoryControlConditions.includes(condition))
+        || new Set(conditions).size !== conditions.length) {
+        throw new Error('conditions must contain unique values from go, no-go, and delayed-stop.');
+      }
+      if (conditions.includes('delayed-stop')) {
+        for (const level of levels as Level[]) {
+          if (windows[level - 1] <= nominalStopDelaysMs[level] * 1.2) {
+            throw new Error(`Level ${level} response window must exceed the delayed-stop range. Increase the window or omit delayed-stop from conditions.`);
+          }
+        }
+      }
+    }
   }
   return { ...structuredClone(input), initialDelayMs: [...delay] } as BenchmarkConfig;
 }
@@ -181,15 +198,25 @@ export function createPlan(input: BenchmarkConfig): Scenario[] {
       } else if (config.category === 'target-acquisition') {
         trials.push(createTargetAcquisitionTrial(seed, level as Level, repetition, initialDelayMs));
       } else if (config.category === 'inhibitory-control') {
-        for (const condition of ['go', 'no-go'] as const satisfies readonly InhibitoryControlCondition[]) {
+        for (const condition of config.conditions ?? inhibitoryControlConditions) {
           const conditionSeed = `${seed}/${condition}`;
           const trialRandom = randomFrom(conditionSeed);
-          trials.push({ id: opaqueTrialId(conditionSeed),
-            category: 'inhibitory-control', seed: conditionSeed, level: level as Level, repetition,
+          const base = { id: opaqueTrialId(conditionSeed),
+            category: 'inhibitory-control' as const, seed: conditionSeed, level, repetition,
             initialDelayMs: Math.round(delay[0] + trialRandom() * (delay[1] - delay[0])),
-            responseWindowMs: config.responseWindowsMs[level - 1]!, condition,
+            responseWindowMs: config.responseWindowsMs[level - 1]!,
             target: { u: 0.2 + trialRandom() * 0.6, v: 0.2 + trialRandom() * 0.6, radius: 42 },
-          });
+          };
+          let trial: InhibitoryControlScenario;
+          if (condition === 'delayed-stop') {
+            const nominalStopDelayMs = nominalStopDelaysMs[level];
+            const randomStop = randomFrom(`${conditionSeed}/stop-delay`);
+            const plannedStopDelayMs = nominalStopDelayMs * (0.8 + randomStop() * 0.4);
+            trial = { ...base, condition, nominalStopDelayMs, plannedStopDelayMs };
+          } else {
+            trial = { ...base, condition };
+          }
+          trials.push(trial);
         }
       } else {
         const trialRandom = randomFrom(seed);
