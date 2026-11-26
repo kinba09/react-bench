@@ -1,6 +1,7 @@
-import type { BrowserDisplay, BrowserEnvironment, SessionCompletion, SessionView } from './types.js';
+import type { BrowserDisplay, BrowserEnvironment, Category, SessionCompletion, SessionView } from './types.js';
 
-export async function connectSession(environment: BrowserEnvironment, onComplete: (callback: () => void) => void): Promise<void> {
+export async function connectSession(environment: BrowserEnvironment, describeTask: (category: Category, responseWindowMs: number) => void,
+  onComplete: (callback: () => void) => void): Promise<void> {
   const id = location.pathname.split('/')[2]!;
   const api = `/api/session/${id}`;
   const controls = document.querySelector<HTMLElement>('#session-controls')!;
@@ -10,6 +11,7 @@ export async function connectSession(environment: BrowserEnvironment, onComplete
   const cancel = document.querySelector<HTMLButtonElement>('#session-cancel')!;
   const retry = document.querySelector<HTMLButtonElement>('#session-retry')!;
   const links = document.querySelector<HTMLElement>('#session-downloads')!;
+  const arena = document.querySelector<HTMLElement>('.arena-shell')!;
   const key = `reactbench-participant-${id}`;
   const clientId = sessionStorage.getItem(key) ?? crypto.randomUUID();
   sessionStorage.setItem(key, clientId);
@@ -18,8 +20,10 @@ export async function connectSession(environment: BrowserEnvironment, onComplete
   let current: SessionView;
   let pendingCompletion: SessionCompletion | undefined;
   let pendingCancellation = false;
+  let hasPreparedTrial = false;
   let trialDisplay = display();
   controls.hidden = false;
+  arena.hidden = true;
   document.querySelector<HTMLElement>('#mode')!.textContent = 'Scored browser session';
   document.querySelector<HTMLElement>('#session-id')!.textContent = `Session ${id.slice(0, 8)}`;
   links.querySelectorAll<HTMLAnchorElement>('a').forEach(link => { link.href = `${api}/${link.dataset.file}`; });
@@ -41,14 +45,21 @@ export async function connectSession(environment: BrowserEnvironment, onComplete
     next.disabled = true;
     cancel.hidden = view.state === 'complete' || view.state === 'cancelled';
     retry.hidden = true;
+    if (!hasPreparedTrial && view.state !== 'ready') describeTask(view.category, view.responseWindowMs);
     if (view.state === 'ready' && view.scenario) {
+      arena.hidden = false;
       environment.prepare(view.scenario, view.index, view.total);
+      hasPreparedTrial = true;
       message.textContent = `Read the rules, then start. ${view.total} scored trials; use your own browser/computer tools.`;
     } else if (view.state === 'between-trials') {
+      if (!hasPreparedTrial) {
+        document.querySelector<HTMLElement>('#status')!.textContent = 'Trial complete';
+        document.querySelector<HTMLElement>('#instruction')!.textContent = 'Prepare the next trial when you are ready.';
+      }
       message.textContent = `Trial ${view.index} recorded. Finish any pending actions, then prepare the next trial. Its clock will wait for Start.`;
       setTimeout(() => { if (current.state === 'between-trials') next.disabled = false; }, 550);
     } else if (view.state === 'complete' || view.state === 'cancelled') {
-      environment.cancel();
+      if (hasPreparedTrial) environment.cancel();
       start.hidden = true;
       links.hidden = false;
       document.querySelector<HTMLElement>('#status')!.textContent = view.state === 'complete' ? 'Session complete' : 'Session cancelled';
@@ -94,7 +105,7 @@ export async function connectSession(environment: BrowserEnvironment, onComplete
       current = await request('start', { trialId: current.scenario!.id, display: display() });
       trialDisplay = display();
       environment.start();
-      message.textContent = 'Trial running. Watch the target and follow the rules.';
+      message.textContent = 'Trial running. Follow the game instructions above.';
     } catch (error) { failed(error); }
     finally { cancel.disabled = false; }
   });
@@ -107,7 +118,7 @@ export async function connectSession(environment: BrowserEnvironment, onComplete
     cancel.disabled = true;
     pendingCancellation = true;
     message.textContent = 'Cancelling session…';
-    environment.cancel();
+    if (hasPreparedTrial) environment.cancel();
     try { show(await request('cancel', { display: display() })); pendingCancellation = false; } catch (error) { failed(error); }
     finally { cancel.disabled = false; }
   });

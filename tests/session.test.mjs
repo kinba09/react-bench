@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { startBrowserSession } from '../dist/session.js';
-import { defaultConfig, createPlan } from '../dist/registry.js';
+import { defaultConfig, createPlan, targetAcquisitionConfig } from '../dist/registry.js';
 import { runBenchmark } from '../dist/runner.js';
 
 const config = { ...defaultConfig, seed: 'browser-session-tests', levels: [1], trialsPerLevel: 3,
@@ -116,6 +116,88 @@ test('native browser early, wrong, and omitted actions remain failures', { timeo
     assert.deepEqual(report.summary.failures, { premature: 1, wrong: 1, expired: 1 });
     assert.ok(report.trials.every(trial => trial.timing.reactionLatencyMs === null));
   }, { ...config, initialDelayMs: [500, 500] });
+});
+
+test('Target Acquisition sessions score seeded choices and export browser evidence', { timeout: 30_000 }, async () => {
+  const acquisition = { ...targetAcquisitionConfig, seed: 'acquisition-session', levels: [1, 2, 4, 5],
+    trialsPerLevel: 1, initialDelayMs: [600, 900] };
+  const plan = createPlan(acquisition);
+  await fixture(async ({ session, browser, output }) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(session.url);
+    const arena = page.locator('#arena');
+    for (const [index, scenario] of plan.entries()) {
+      const start = page.getByRole('button', { name: `Start trial ${index + 1}`, exact: true });
+      await page.getByRole('img', { name: `Reference shape: ${scenario.reference.symbol}`, exact: true }).waitFor();
+      const matching = scenario.objects.find(object => object.matching);
+      const distractor = scenario.objects.find(object => !object.matching);
+      const clickObject = async object => {
+        const rect = await arena.boundingBox();
+        await page.mouse.click(rect.x + rect.width * object.u, rect.y + rect.height * object.v);
+      };
+      if (index === 0) {
+        const alpha = () => arena.evaluate((canvas, { u, v }) =>
+          canvas.getContext('2d').getImageData(Math.floor(canvas.width * u), Math.floor(canvas.height * v), 1, 1).data[3], matching);
+        assert.equal(await alpha(), 0);
+        await start.click();
+        await page.waitForFunction(() => document.querySelector('#status').textContent === 'Find the match');
+        assert.equal(await alpha(), 255);
+        const oldScroll = await page.evaluate(() => scrollY);
+        // Exercise a viewport move after activation, when the board has already been drawn.
+        await page.evaluate(() => scrollTo(0, scrollY > 0 ? 0 : 100));
+        await page.waitForFunction(previous => scrollY !== previous, oldScroll);
+        await clickObject(matching);
+      } else {
+        await start.click();
+        if (index === 1) {
+          await page.waitForFunction(() => document.querySelector('#status').textContent === 'Find the match');
+          await clickObject(distractor);
+          await clickObject(matching);
+        } else if (index === 3) {
+          await page.waitForFunction(() => document.querySelector('#status').textContent === 'Get ready');
+          await clickObject(matching);
+        }
+      }
+      if (index < plan.length - 1) await page.getByRole('button', { name: 'Prepare next trial', exact: true }).click();
+    }
+    await page.getByText('1 / 4 correct. Results saved.', { exact: true }).waitFor();
+    const report = await session.finished;
+    assert.equal(report.category, 'target-acquisition');
+    assert.equal(report.comparisonClass, 'visual');
+    assert.deepEqual(report.trials.map(trial => trial.scenario), plan);
+    assert.deepEqual(report.trials.map(trial => trial.outcome), ['success', 'wrong', 'expired', 'premature']);
+    assert.deepEqual(report.summary.byLevel.map(level => level.objectsPerTrial), [6, 16, 64, 100]);
+    for (const trial of report.trials.slice(0, 3)) {
+      const activation = trial.events.find(event => event.type === 'activated');
+      const started = trial.events.find(event => event.type === 'started');
+      assert.ok(activation.atMs >= started.atMs + trial.scenario.initialDelayMs);
+      assert.equal(activation.deadlineAtMs, activation.atMs + 10_000);
+    }
+    const [success, wrong, expired, premature] = report.trials;
+    for (const trial of [success, wrong]) {
+      const clicks = trial.events.filter(event => event.type === 'action-registered');
+      assert.equal(clicks.length, 1);
+      assert.equal(clicks[0].inputTrusted, true);
+      assert.equal(trial.scenario.objects[clicks[0].objectIndex].matching, trial === success);
+    }
+    const activation = success.events.find(event => event.type === 'activated');
+    const click = success.events.find(event => event.type === 'action-registered');
+    assert.equal(success.timing.reactionLatencyMs, click.atMs - activation.atMs);
+    assert.ok(expired.events.at(-1).atMs >= expired.events.at(-1).deadlineAtMs);
+    assert.ok(!expired.events.some(event => event.type === 'action-registered'));
+    assert.ok(!premature.events.some(event => event.type === 'activated'));
+    assert.deepEqual(JSON.parse(await readFile(join(output, 'results.json'), 'utf8')), report);
+    const rows = (await readFile(join(output, 'trials.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    assert.deepEqual(rows, report.trials);
+    const html = await readFile(join(output, 'report.html'), 'utf8');
+    assert.match(html, /Target Acquisition/);
+    assert.match(html, /<th>Objects<\/th>/);
+    assert.match(html, /1 \/ 4/);
+    await page.reload();
+    await page.getByText('1 / 4 correct. Results saved.', { exact: true }).waitFor();
+    assert.equal(await page.locator('#category-title').textContent(), 'Target Acquisition');
+    assert.equal(await page.locator('#window').textContent(), '10 s');
+  }, acquisition);
 });
 
 test('session protocol isolates participants and validates terminal evidence, retries and cancellation', { timeout: 10_000 }, async () => {

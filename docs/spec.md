@@ -8,7 +8,7 @@ Researchers and agent developers need to understand how accurately, quickly, and
 
 They need a reproducible local benchmark that measures the complete perception, decision, and action loop, supports different clients and model providers, and makes its measurement limits visible. Users should be able to evaluate subscription clients, API-backed agents, and locally hosted agents through comparable observation and action rules without requiring a particular commercial account.
 
-Current implementation includes browser practice, Visual Reaction, Target Acquisition, all five Dynamic Tracking levels, Inhibitory Control go/no-go, and privileged offline oracle reports. Scored Visual Reaction browser sessions now default to three seeded level-1 trials with visible readiness, native-tool input, cancellation, and exports. Continuous screenshot capture has been removed from session and oracle execution. Other-game sessions and genuine client validation remain in #10/#11 and #12/#13.
+Current implementation includes browser practice, Visual Reaction, Target Acquisition, all five Dynamic Tracking levels, Inhibitory Control go/no-go, and privileged offline oracle reports. Visual Reaction and Target Acquisition support scored browser sessions with visible readiness, native-tool input, cancellation, and exports. The default is three seeded level-1 Visual Reaction trials. Continuous screenshot capture has been removed from session and oracle execution. Other-game sessions and genuine client validation remain in #10/#11 and #12/#13.
 
 ## Solution
 
@@ -172,7 +172,7 @@ Provide a browser evaluation session with visible instructions/readiness, seeded
 
 - This specification incorporates the latest browser-first decision: agents own observation/input through their tools, and ReactBench owns the task and scoring. This supersedes earlier screenshot-feed/MCP-bridge requirements while retaining six categories, five levels, binary tracking hits, reacquisition, and three trials per level.
 - Preserve modular game/session/grading/reporting boundaries, deterministic scoring, oracle separation, reproducibility, licensing, contribution guidance, and credential-free CI.
-- See docs/plan.md for migration order and parallel work. The first Visual Reaction session slice and sampler removal are implemented. #10/#11 retain remaining session coverage and lifecycle validation; no genuine Codex/Claude evaluation is claimed.
+- See [the implementation plan](plan.md) for the remaining session coverage, lifecycle validation, and genuine Codex and Claude runs.
 - Codex CLI and Claude Code remain planned client targets. Their native browser/computer tools and session attachment must be validated; this plan does not establish live compatibility.
 - Label reports as fixture, privileged oracle, or genuine external-agent data. Oracle reports exist; no genuine external-agent session has been validated.
 - Publication target is GitHub Issues in kinba09/react-bench with the ready-for-agent label. The user confirmed the testing boundary; there is no additional product interview or triage requirement.

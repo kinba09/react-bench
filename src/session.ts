@@ -8,10 +8,10 @@ import { createPlan, defaultConfig, validateConfig } from './registry.js';
 import { createRunReport } from './run-report.js';
 import { renderReport, writeReport } from './reporter.js';
 import { startServer } from './server.js';
-import type { AgentMetadata, BrowserDisplay, BrowserEvent, RunReport, SessionCompletion, SessionView, TrialResult, VisualReactionConfig } from './types.js';
+import type { AgentMetadata, BenchmarkConfig, BrowserDisplay, BrowserEvent, RunReport, Scenario, SessionCompletion, SessionView, TrialResult } from './types.js';
 
 export interface SessionOptions {
-  config?: VisualReactionConfig;
+  config?: BenchmarkConfig;
   outputDir: string;
   port?: number;
   agent?: AgentMetadata & { access: 'visual' };
@@ -49,7 +49,8 @@ async function readBody(request: IncomingMessage): Promise<Record<string, unknow
   return value as Record<string, unknown>;
 }
 
-function completionFrom(body: Record<string, unknown>, trialId: string): SessionCompletion {
+function completionFrom(body: Record<string, unknown>, scenario: Scenario): SessionCompletion {
+  const trialId = scenario.id;
   requireThat(body.trialId === trialId, 'This is not the active trial.', 409);
   requireThat(finite(body.browserTimeOriginMs) && body.browserTimeOriginMs > 0, 'Invalid browser clock origin.');
   const events = body.events as BrowserEvent[] | undefined;
@@ -60,8 +61,17 @@ function completionFrom(body: Record<string, unknown>, trialId: string): Session
       && event.atMs >= previous && ['prepared', 'started', 'activated', 'action-registered', 'expired'].includes(event.type), 'Invalid trial event or clock.');
     requireThat(['prepared', 'waiting', 'active', 'complete'].includes(event.phase), 'Invalid event phase.');
     previous = event.atMs;
-    if (event.type === 'action-registered') requireThat(finite(event.x) && finite(event.y)
-      && typeof event.hit === 'boolean' && event.inputTrusted === true, 'Expected a browser-registered click.');
+    if (event.type === 'action-registered') {
+      requireThat(finite(event.x) && finite(event.y)
+        && typeof event.hit === 'boolean' && event.inputTrusted === true, 'Expected a browser-registered click.');
+      if (scenario.category === 'target-acquisition') {
+        const index = event.objectIndex;
+        requireThat(index === undefined || (Number.isInteger(index) && index >= 0 && index < scenario.objects.length),
+          'Invalid acquisition object index.');
+        const matching = index === undefined ? false : scenario.objects[index]!.matching;
+        requireThat(event.hit === matching, 'Click evidence does not match the acquisition board.');
+      }
+    }
     if (event.type === 'activated') requireThat(finite(event.deadlineAtMs) && event.deadlineAtMs > event.atMs, 'Invalid activation deadline.');
   }
   requireThat(events[0]?.type === 'prepared' && events[1]?.type === 'started'
@@ -82,7 +92,9 @@ function completionFrom(body: Record<string, unknown>, trialId: string): Session
 /** Local, trusted browser session. Agents bring their own observation and input tools. */
 export async function startBrowserSession(options: SessionOptions) {
   const config = validateConfig(options.config ?? { ...defaultConfig, levels: [1], trialsPerLevel: 3 });
-  if (config.category !== 'visual-reaction') throw new Error('Browser sessions currently support Visual Reaction only.');
+  if (config.category !== 'visual-reaction' && config.category !== 'target-acquisition') {
+    throw new Error('Browser sessions currently support Visual Reaction and Target Acquisition.');
+  }
   for (const name of ['results.json', 'trials.jsonl', 'report.html']) {
     try { await access(join(options.outputDir, name)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
@@ -105,9 +117,13 @@ export async function startBrowserSession(options: SessionOptions) {
   const finished = new Promise<RunReport>(resolve => { resolveFinished = resolve; });
   const prefix = `/api/session/${id}`;
   let queue = Promise.resolve();
-  const view = (): SessionView => ({ id, state, index: index + 1, total: plan.length,
-    level: plan[index]!.level,
-    scenario: state === 'ready' ? plan[index]! : null, correct: trials.filter(trial => trial.outcome === 'success').length });
+  const view = (): SessionView => {
+    const scenario = plan[index]!;
+    return { id, state, index: index + 1, total: plan.length,
+      category: scenario.category, level: scenario.level,
+      responseWindowMs: scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs,
+      scenario: state === 'ready' ? scenario : null, correct: trials.filter(trial => trial.outcome === 'success').length };
+  };
   async function save(status: RunReport['status']) {
     if (report) return;
     const result = createRunReport(config, agent, trials, {
@@ -158,11 +174,11 @@ export async function startBrowserSession(options: SessionOptions) {
       }
       requireThat(state === 'active', 'No trial is accepting results.', 409);
       const scenario = plan[index]!;
-      const completion = completionFrom(body, scenario.id);
+      const completion = completionFrom(body, scenario);
       const prepared = completion.events[0]!;
       const started = completion.events[1]!;
       const activation = completion.events.find(event => event.type === 'activated');
-      if (activation && scenario.category === 'visual-reaction') {
+      if (activation && (scenario.category === 'visual-reaction' || scenario.category === 'target-acquisition')) {
         requireThat(activation.atMs >= started.atMs + scenario.initialDelayMs
           && activation.deadlineAtMs === activation.atMs + scenario.responseWindowMs, 'Trace does not match this trial configuration.');
       }
