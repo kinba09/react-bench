@@ -383,7 +383,7 @@ const environment: BrowserEnvironment = {
       plannedActivation = hiddenDeadline;
       record('started', now, { plannedActivationAtMs: plannedActivation, phaseDeadlineAtMs: watchDeadline });
       status.textContent = 'Watch';
-      instruction.textContent = 'Watch the star as it moves. The field will disappear briefly.';
+      instruction.textContent = 'Watch the star move. Wait for it to reappear before clicking.';
     } else if (scenario.category === 'inhibitory-control') {
       phase = 'waiting';
       plannedActivation = now + scenario.initialDelayMs;
@@ -395,7 +395,7 @@ const environment: BrowserEnvironment = {
       plannedActivation = now + scenario.initialDelayMs;
       record('started', now, { plannedActivationAtMs: plannedActivation });
       status.textContent = 'Get ready';
-      instruction.textContent = 'The ten-second response window begins shortly.';
+      instruction.textContent = 'Wait for the field to appear.';
     }
     document.querySelector<HTMLButtonElement>('#start')!.disabled = true;
     draw();

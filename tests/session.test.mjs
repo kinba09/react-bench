@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { startBrowserSession } from '../dist/session.js';
-import { defaultConfig, createPlan, targetAcquisitionConfig } from '../dist/registry.js';
+import { defaultConfig, createPlan, defaultDynamicTrackingConfig, targetAcquisitionConfig } from '../dist/registry.js';
 import { runBenchmark } from '../dist/runner.js';
 
 const config = { ...defaultConfig, seed: 'browser-session-tests', levels: [1], trialsPerLevel: 3,
@@ -116,6 +116,164 @@ test('native browser early, wrong, and omitted actions remain failures', { timeo
     assert.deepEqual(report.summary.failures, { premature: 1, wrong: 1, expired: 1 });
     assert.ok(report.trials.every(trial => trial.timing.reactionLatencyMs === null));
   }, { ...config, initialDelayMs: [500, 500] });
+});
+
+const trackingConfig = { ...defaultDynamicTrackingConfig, seed: 'tracking-session-tests', trialsPerLevel: 1,
+  initialDelayMs: [100, 180], clickWindowMs: 1200 };
+
+async function clickMovingObject(page, required) {
+  const point = await page.locator('#arena').evaluate((canvas, required) => {
+    const rect = canvas.getBoundingClientRect();
+    const context = canvas.getContext('2d');
+    const top = 68; // The reference star is above the moving field.
+    const pixels = context.getImageData(0, top, canvas.width, canvas.height - top).data;
+    const candidates = [];
+    const target = { x: 0, y: 0, count: 0 };
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      const r = pixels[offset];
+      const g = pixels[offset + 1];
+      const b = pixels[offset + 2];
+      const gold = r === 229 && g === 168 && b === 46;
+      const blue = !required && r === 100 && g === 127 && b === 152;
+      if (!gold && !blue) continue;
+      const x = (offset / 4) % canvas.width;
+      const y = Math.floor(offset / 4 / canvas.width) + top;
+      if (gold) {
+        target.x += x;
+        target.y += y;
+        target.count++;
+      } else {
+        candidates.push({ x, y });
+      }
+    }
+    if (!target.count) return null;
+    const center = { x: target.x / target.count, y: target.y / target.count };
+    const chosen = required ? center : candidates.find(point => Math.hypot(point.x - center.x, point.y - center.y) > 55);
+    return chosen ? { x: rect.left + chosen.x, y: rect.top + chosen.y } : null;
+  }, required);
+  assert.ok(point, 'The rendered field has the requested moving object');
+  await page.mouse.click(point.x, point.y);
+}
+
+async function waitForTrackingPhase(page, name) {
+  await page.waitForFunction(phase => document.querySelector('#status').textContent.startsWith(phase), name);
+}
+
+test('Dynamic Tracking scores visible play and reacquisition at all five levels', { timeout: 30_000 }, async () => {
+  await fixture(async ({ session, browser, output }) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(session.url);
+    const plan = createPlan(trackingConfig);
+    const malformedTrial = plan.find(trial => trial.level === 4);
+    let rejectedStatus;
+    await page.route(`**/api/session/${session.id}/complete`, async route => {
+      const completion = route.request().postDataJSON();
+      if (completion.trialId !== malformedTrial.id || rejectedStatus !== undefined) return route.continue();
+      const hidden = completion.events.find(event => event.type === 'phase-transition' && event.phase === 'hidden');
+      hidden.phaseDeadlineAtMs += 1;
+      const response = await route.fetch({ postData: completion });
+      rejectedStatus = response.status();
+      await route.fulfill({ response });
+    });
+
+    for (const [index, scenario] of plan.entries()) {
+      await page.getByRole('button', { name: `Start trial ${index + 1}`, exact: true }).click();
+      if (scenario.level >= 4) {
+        await waitForTrackingPhase(page, 'Watch');
+        await page.locator('#phase-countdown').waitFor({ state: 'visible' });
+      }
+      await waitForTrackingPhase(page, scenario.level >= 4 ? 'Click' : 'Moving');
+      await clickMovingObject(page, true);
+      if (scenario === malformedTrial) {
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        assert.equal(rejectedStatus, 400);
+      }
+      if (index < plan.length - 1) await page.getByRole('button', { name: 'Prepare next trial', exact: true }).click();
+    }
+
+    await page.getByText('5 / 5 correct. Results saved.', { exact: true }).waitFor();
+    const report = await session.finished;
+    assert.equal(report.category, 'dynamic-tracking');
+    assert.equal(report.environment.actionInterface, 'external-browser-tools');
+    assert.equal(report.comparisonClass, 'visual');
+    assert.deepEqual(report.summary.byLevel.map(level => level.objectsPerTrial), [1, 5, 15, 30, 60]);
+    assert.deepEqual(report.trials.map(trial => trial.scenario), plan);
+    for (const trial of report.trials) {
+      const activation = trial.events.find(event => event.type === 'activated');
+      const click = trial.events.at(-1);
+      assert.equal(click.type, 'action-registered');
+      assert.equal(click.clickedObjectId, trial.scenario.requiredTargetId);
+      assert.equal(click.inputTrusted, true);
+      assert.equal(trial.timing.reactionLatencyMs, click.atMs - activation.atMs);
+      assert.equal(activation.deadlineAtMs, activation.atMs + trial.scenario.clickWindowMs);
+      if (trial.scenario.level >= 4) {
+        const [hidden, reappearance] = trial.events.filter(event => event.type === 'phase-transition');
+        const start = trial.events.find(event => event.type === 'started');
+        assert.equal(start.phase, 'watching');
+        assert.equal(hidden.phase, 'hidden');
+        assert.ok(hidden.atMs >= start.atMs + trial.scenario.watchDurationMs);
+        assert.equal(hidden.phaseDeadlineAtMs, hidden.atMs + trial.scenario.hiddenDurationMs);
+        assert.equal(reappearance.phase, 'active');
+        assert.equal(reappearance.atMs, activation.atMs);
+        assert.ok(activation.atMs >= hidden.phaseDeadlineAtMs);
+      }
+    }
+    assert.deepEqual(JSON.parse(await readFile(join(output, 'results.json'), 'utf8')), report);
+    const log = await readFile(join(output, 'trials.jsonl'), 'utf8');
+    assert.deepEqual(log.trim().split('\n').map(line => JSON.parse(line)), report.trials);
+    const html = await readFile(join(output, 'report.html'), 'utf8');
+    assert.match(html, /Dynamic Tracking/);
+    assert.match(html, /5 \/ 5/);
+  }, trackingConfig);
+});
+
+test('Dynamic Tracking records premature clicks, distractor hits, and reappearance timeouts', { timeout: 30_000 }, async () => {
+  const selected = { ...trackingConfig, levels: [4, 5], trialsPerLevel: 2 };
+  const plan = createPlan(selected);
+  const expected = { '4/1': 'watching', '5/1': 'hidden', '4/2': 'wrong', '5/2': 'expired' };
+  await fixture(async ({ session, browser }) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(session.url);
+    for (const [index, scenario] of plan.entries()) {
+      const action = expected[`${scenario.level}/${scenario.repetition}`];
+      await page.getByRole('button', { name: `Start trial ${index + 1}`, exact: true }).click();
+      if (action === 'watching' || action === 'hidden') {
+        await waitForTrackingPhase(page, action === 'watching' ? 'Watch' : 'Hidden');
+        const rect = await page.locator('#arena').boundingBox();
+        await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      } else if (action === 'wrong') {
+        await waitForTrackingPhase(page, 'Click');
+        await clickMovingObject(page, false);
+      }
+      if (index < plan.length - 1) await page.getByRole('button', { name: 'Prepare next trial', exact: true }).click();
+    }
+    await page.getByText('0 / 4 correct. Results saved.', { exact: true }).waitFor();
+    const report = await session.finished;
+    assert.deepEqual(report.summary.failures, { premature: 2, wrong: 1, expired: 1 });
+    for (const trial of report.trials) {
+      const { level, repetition } = trial.scenario;
+      const action = expected[`${level}/${repetition}`];
+      const terminal = trial.events.at(-1);
+      const activation = trial.events.find(event => event.type === 'activated');
+      assert.equal(trial.timing.reactionLatencyMs, null);
+      if (action === 'watching' || action === 'hidden') {
+        assert.equal(trial.outcome, 'premature');
+        assert.equal(terminal.phase, action);
+        assert.equal(terminal.clickedObjectId, null);
+        assert.deepEqual(terminal.objects, []);
+        assert.equal(activation, undefined);
+      } else if (action === 'wrong') {
+        assert.equal(trial.outcome, 'wrong');
+        const clicked = terminal.objects.find(object => object.id === terminal.clickedObjectId);
+        assert.equal(clicked?.role, 'distractor');
+      } else {
+        assert.equal(trial.outcome, 'expired');
+        assert.equal(terminal.type, 'expired');
+        assert.equal(terminal.deadlineAtMs, activation.atMs + trial.scenario.clickWindowMs);
+        assert.ok(terminal.atMs >= terminal.deadlineAtMs);
+      }
+    }
+  }, selected);
 });
 
 test('Target Acquisition sessions score seeded choices and export browser evidence', { timeout: 30_000 }, async () => {

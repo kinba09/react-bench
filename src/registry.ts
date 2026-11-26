@@ -38,7 +38,7 @@ export const targetAcquisition = {
 export const dynamicTracking = {
   id: 'dynamic-tracking' as const,
   title: 'Dynamic Tracking',
-  instructions: 'Find the star shown in the reference and click it once while it moves. Other objects are distractors. One click only.',
+  instructions: 'Click the moving star once when the phase says Moving or Click. During Watch and Hidden, wait for the star to reappear.',
 };
 export const inhibitoryControl = {
   id: 'inhibitory-control' as const,
