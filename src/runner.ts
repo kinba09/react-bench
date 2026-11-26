@@ -76,7 +76,9 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     try {
       await Promise.race([
         page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'complete', undefined,
-          { timeout: scenario.initialDelayMs + (scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs) + 10_000 }),
+          { timeout: (scenario.category === 'dynamic-tracking'
+            ? scenario.watchDurationMs + scenario.hiddenDurationMs + (scenario.level < 4 ? scenario.initialDelayMs : 0) + scenario.clickWindowMs
+            : scenario.initialDelayMs + scenario.responseWindowMs) + 10_000 }),
         failure, observations.failure,
       ]);
     } finally {

@@ -77,20 +77,22 @@ test('replays a seeded trajectory through real Chromium at matched elapsed motio
   assert.ok(Math.abs(normalized[0].y - normalized[1].y) < 1e-6);
 });
 
-test('plans three seeded trials at each visible Dynamic Tracking level with constant motion settings', async () => {
+test('plans three seeded trials at every Dynamic Tracking level with constant motion settings', async () => {
   const config = JSON.parse(await readFile(new URL('../configs/dynamic-tracking.json', import.meta.url), 'utf8'));
   const first = createPlan(config);
   const replay = createPlan(config);
-  assert.equal(first.length, 9);
+  assert.equal(first.length, 15);
   assert.deepEqual(first, replay);
-  for (const level of [1, 2, 3]) {
+  for (const level of [1, 2, 3, 4, 5]) {
     const trials = first.filter(trial => trial.level === level);
     assert.equal(trials.length, 3);
     for (const trial of trials) {
       assert.equal(trial.category, 'dynamic-tracking');
       assert.equal(trial.clickWindowMs, 10_000);
-      assert.ok(trial.initialDelayMs >= 1000 && trial.initialDelayMs <= 4000);
+      assert.ok(level >= 4 ? trial.initialDelayMs === 0 : trial.initialDelayMs >= 1000 && trial.initialDelayMs <= 4000);
       assert.equal(trial.objects.length, dynamicTrackingObjectCounts[level]);
+      assert.equal(trial.watchDurationMs, level >= 4 ? 1500 : 0);
+      assert.equal(trial.hiddenDurationMs, level === 4 ? 1000 : level === 5 ? 2000 : 0);
       assert.equal(trial.objects.filter(object => object.role === 'required').length, 1);
       assert.equal(trial.objects.filter(object => object.role === 'distractor').length, dynamicTrackingObjectCounts[level] - 1);
       for (const object of trial.objects) {
@@ -99,7 +101,132 @@ test('plans three seeded trials at each visible Dynamic Tracking level with cons
       }
     }
   }
-  assert.throws(() => createPlan({ ...config, levels: [4] }), /levels must contain unique integers from 1 to 3/);
+  assert.throws(() => createPlan({ ...config, levels: [6] }), /levels must contain unique integers from 1 to 5/);
+});
+
+test('plans the occlusion levels with 30 and 60 moving objects and fixed phase durations', () => {
+  const trials = createPlan({ category: 'dynamic-tracking', seed: 'occlusion-plan', levels: [4, 5],
+    trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [1000, 4000] });
+  assert.deepEqual(trials.map(trial => [trial.level, trial.objects.length, trial.watchDurationMs, trial.hiddenDurationMs])
+    .sort((a, b) => a[0] - b[0]), [
+    [4, 30, 1500, 1000], [5, 60, 1500, 2000],
+  ]);
+});
+
+test('records Watch, Hidden, and reappearance timing and keeps the target hidden during occlusion', { timeout: 15_000 }, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(server.url);
+    await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
+    for (const level of [4, 5]) {
+      const scenario = createPlan({ category: 'dynamic-tracking', seed: `occlusion-phases-${level}`, levels: [level],
+        trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
+      await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
+      await page.evaluate(() => window.reactBenchEnvironment.start());
+      await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'watching');
+      const watching = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
+      assert.equal(watching.events.find(event => event.type === 'started').phase, 'watching');
+      await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'hidden');
+      const hidden = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
+      const hiddenEvent = hidden.events.find(event => event.type === 'phase-transition');
+      assert.equal(hiddenEvent.phase, 'hidden');
+      assert.ok(hiddenEvent.atMs - watching.events.find(event => event.type === 'started').atMs >= 1400);
+      assert.ok(hiddenEvent.atMs - watching.events.find(event => event.type === 'started').atMs < 1900);
+      const hiddenSeconds = scenario.hiddenDurationMs / 1000;
+      assert.match(await page.locator('#phase-countdown').textContent(), new RegExp(`Reappears in ${hiddenSeconds} s`));
+      assert.equal(await page.locator('#phase-countdown').evaluate(element => getComputedStyle(element).fontSize), '11px');
+      const invisibleTarget = hidden.objects.find(object => object.id === hidden.requiredTargetId);
+      const pixel = await page.evaluate(({ x, y }) => {
+        const canvas = document.querySelector('#arena');
+        const rect = canvas.getBoundingClientRect();
+        return [...canvas.getContext('2d').getImageData(x - rect.left, y - rect.top, 1, 1).data];
+      }, invisibleTarget);
+      assert.deepEqual(pixel, [248, 250, 252, 255]);
+      await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'active');
+      const active = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
+      const activation = active.events.find(event => event.type === 'activated');
+      assert.ok(activation.atMs - hiddenEvent.atMs >= scenario.hiddenDurationMs - 150);
+      assert.ok(activation.atMs - hiddenEvent.atMs < scenario.hiddenDurationMs + 400);
+      assert.equal(activation.deadlineAtMs - activation.atMs, 10_000);
+      assert.equal(await page.locator('#phase-countdown').isHidden(), true);
+      assert.match(await page.locator('#status').textContent(), /^Click · \d+ s$/);
+      const target = active.objects.find(object => object.id === active.requiredTargetId);
+      await page.mouse.click(target.x, target.y);
+      const finished = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
+      const click = finished.events.find(event => event.type === 'action-registered');
+      assert.equal(click.phase, 'active');
+      assert.equal(click.clickedObjectId, scenario.requiredTargetId);
+    }
+  } finally { await browser.close(); await server.close(); }
+});
+
+test('fails clicks during Watch and Hidden without testing against invisible target positions', { timeout: 15_000 }, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(server.url);
+    await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
+    const scenario = createPlan({ category: 'dynamic-tracking', seed: 'premature-occlusion', levels: [4],
+      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
+    const clickDuring = async phase => {
+      await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
+      await page.evaluate(() => window.reactBenchEnvironment.start());
+      await page.waitForFunction(phase => window.reactBenchEnvironment.snapshot().phase === phase, phase);
+      const state = await page.evaluate(() => window.reactBenchEnvironment.snapshot());
+      const target = state.objects.find(object => object.id === state.requiredTargetId);
+      await page.mouse.click(target.x, target.y);
+      return page.evaluate(() => window.reactBenchEnvironment.snapshot());
+    };
+    for (const phase of ['watching', 'hidden']) {
+      const finished = await clickDuring(phase);
+      const click = finished.events.find(event => event.type === 'action-registered');
+      assert.equal(finished.phase, 'complete');
+      assert.equal(click.phase, phase);
+      assert.equal(click.hit, false);
+      assert.equal(click.clickedObjectId, null);
+      assert.deepEqual(click.objects, []);
+    }
+  } finally { await browser.close(); await server.close(); }
+});
+
+test('starts the response clock on reappearance and expires after the resumed click window', { timeout: 15_000 }, async () => {
+  const report = await runBenchmark({ config: { ...quickConfig, levels: [5], clickWindowMs: 250 }, adapterFactory: () => ({
+    metadata: { name: 'silent-occlusion-fixture', model: null, access: 'visual' },
+    async prepare() {}, async run() {},
+  }) });
+  const trial = report.trials[0];
+  const activation = trial.events.find(event => event.type === 'activated');
+  const hidden = trial.events.find(event => event.type === 'phase-transition' && event.phase === 'hidden');
+  const expired = trial.events.find(event => event.type === 'expired');
+  assert.ok(hidden.atMs < activation.atMs);
+  assert.equal(activation.deadlineAtMs - activation.atMs, 250);
+  assert.ok(expired.atMs - activation.atMs >= 250);
+  assert.equal(trial.outcome, 'expired');
+  assert.equal(trial.scenario.objects.length, 60);
+  assert.equal(report.summary.byLevel[0].objectsPerTrial, 60);
+  assert.equal(trial.timing.reactionLatencyMs, null);
+});
+
+test('the privileged control reacquires the target and measures latency from reappearance', { timeout: 15_000 }, async () => {
+  const output = await mkdtemp(join(tmpdir(), 'reactbench-occlusion-'));
+  try {
+    const report = await runBenchmark({ config: { ...quickConfig, levels: [4], clickWindowMs: 750 }, outputDir: output });
+    const trial = report.trials[0];
+    const activation = trial.events.find(event => event.type === 'activated');
+    const hidden = trial.events.find(event => event.type === 'phase-transition' && event.phase === 'hidden');
+    const click = trial.events.find(event => event.type === 'action-registered');
+    assert.equal(trial.outcome, 'success');
+    assert.ok(hidden.atMs < activation.atMs);
+    assert.equal(click.phase, 'active');
+    assert.equal(click.clickedObjectId, trial.scenario.requiredTargetId);
+    assert.equal(trial.timing.reactionLatencyMs, click.atMs - activation.atMs);
+    const saved = JSON.parse((await readFile(join(output, 'trials.jsonl'), 'utf8')).trim());
+    assert.deepEqual(saved.events.map(event => event.phase).filter(phase => ['watching', 'hidden', 'active'].includes(phase)),
+      ['watching', 'hidden', 'active', 'active', 'active']);
+  } finally { await rm(output, { recursive: true, force: true }); }
 });
 
 const quickConfig = { category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3],
@@ -143,7 +270,7 @@ test('runs all visible levels through the common oracle, logs, and category summ
   }
 });
 
-test('grades the first incorrect moving-object click and discards later clicks', { timeout: 15_000 }, async () => {
+test('grades the first incorrect moving-object click at an occlusion level and discards later clicks', { timeout: 15_000 }, async () => {
   class WrongFirstAttempt extends OracleAdapter {
     metadata = { name: 'wrong-first-attempt-fixture', model: null, access: 'privileged-oracle' };
     async run(context) {
@@ -156,7 +283,7 @@ test('grades the first incorrect moving-object click and discards later clicks',
     }
   }
   const report = await runBenchmark({
-    config: { ...quickConfig, levels: [2], clickWindowMs: 800 },
+    config: { ...quickConfig, levels: [4], clickWindowMs: 800 },
     adapterFactory: () => new WrongFirstAttempt(),
   });
   const trial = report.trials[0];
