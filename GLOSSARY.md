@@ -50,15 +50,15 @@ One scored attempt at a category's game; a Multi-Step Reaction trial contains it
 
 ## Trial preparation
 
-The phase in which rules and reference targets are provided before the adapter signals readiness and the seeded initial wait begins. Game state and agent context reset between trials, and late responses remain attributed to their original trial and are discarded.
+The phase in which the browser shows rules and reference targets before a visible readiness/start action begins the seeded initial wait. Game state resets between trials. An external launcher or operator manages agent-context resets and records that policy. Session transitions must prevent delayed input from a completed trial from scoring against the next one.
 
 ## Observation policy
 
-The configured screenshot policy runs independently of agent reasoning, retains the newest available frame, and defaults to two captures per second with a 1280 × 720 viewport and device scale 1. Runs record the actual capture cadence achieved.
+The declared way an agent observes the browser using its own tools. ReactBench does not provide images, capture continuously, or set a screenshot rate in the intended evaluation flow. Record tool identity and browser/display settings; any exposed observation timings are optional and unknown values remain unavailable. The screenshot sampler has been removed; schema 1 observation fields are historical only.
 
 ## Reaction latency
 
-For a response to a task-defined stimulus, the elapsed browser-clock time from stimulus activation to action registration. This is software timing, with screenshot request and return times recorded separately and internal model-processing times unavailable unless exposed by the adapter.
+For a response to a task-defined stimulus, the elapsed browser-clock time from stimulus activation to action registration. This is software timing. Agent-tool timings are optional when exposed by the agent's own tools; internal model-processing times remain unavailable unless explicitly exposed.
 
 _Avoid_: exact physical display latency, inferred internal model latency.
 
@@ -70,10 +70,18 @@ _Avoid_: fair visual competitor, leaderboard agent.
 
 ## Agent adapter
 
-The integration boundary that gives an evaluated agent task instructions and screenshots and maps its chosen mouse/keyboard actions to the benchmark browser without exposing hidden task state. Codex CLI and Claude Code use an MCP bridge, while API-backed, local, and existing computer-use agents can implement the same observation/action contract directly.
+An optional launcher/lifecycle integration that points an agent at the benchmark browser or session URL and records setup metadata. The agent uses its own observation and input tools. ReactBench does not require a shared screenshot/action adapter or custom MCP bridge. Internal input fixtures and the privileged oracle remain available for tests and offline controls; external browser sessions require no adapter.
 
 ## Evaluated agent setup
 
-The combination of model, client or reasoning loop, adapter, observation policy, and action interface measured in a run. Results identify that setup so model choices and tool overhead can be interpreted together.
+The combination of model, client or reasoning loop, browser/computer tools, optional launcher, observation policy, and context-reset policy measured in a run. Results identify that setup so model choices and tool overhead can be interpreted together.
 
 _Avoid_: isolated model speed as a description of whole-agent results.
+
+## Browser evaluation session
+
+A scored run of seeded trials in a browser, with on-page instructions, readiness, trial progression, event collection, completion, and result export. The agent operates the page through its own tools. Visual Reaction sessions implement this flow; a browser practice attempt alone is not an evaluated run.
+
+## Session controller
+
+The benchmark component responsible for scheduling trials, readiness, deadlines, trial identity, event collection, cancellation, and exports. It does not supply an external agent's observations or dispatch that agent's task actions. The offline oracle runner separately dispatches its own control inputs; it captures no screenshots.

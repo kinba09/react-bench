@@ -18,7 +18,7 @@ test('hides moving targets until the seeded wait completes', { timeout: 10_000 }
     await page.goto(server.url);
     await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
     const scenario = createPlan({ category: 'dynamic-tracking', seed: 'hidden-preview', levels: [1],
-      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 1000, initialDelayMs: [400, 400] })[0];
+      trialsPerLevel: 1, clickWindowMs: 1000, initialDelayMs: [400, 400] })[0];
     await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
     const pixel = () => page.evaluate(() => {
       const scene = window.reactBenchEnvironment.snapshot();
@@ -45,7 +45,7 @@ test('replays a seeded trajectory through real Chromium at matched elapsed motio
   let config;
   for (let index = 0; index < 300; index++) {
     const candidate = { category: 'dynamic-tracking', seed: `motion-replay-${index}`, levels: [1],
-      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 1000, initialDelayMs: [100, 200] };
+      trialsPerLevel: 1, clickWindowMs: 1000, initialDelayMs: [100, 200] };
     const object = createPlan(candidate)[0].objects[0];
     if (object.u > 0.4 && object.u < 0.6 && object.v > 0.4 && object.v < 0.6) { config = candidate; break; }
   }
@@ -106,7 +106,7 @@ test('plans three seeded trials at every Dynamic Tracking level with constant mo
 
 test('plans the occlusion levels with 30 and 60 moving objects and fixed phase durations', () => {
   const trials = createPlan({ category: 'dynamic-tracking', seed: 'occlusion-plan', levels: [4, 5],
-    trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [1000, 4000] });
+    trialsPerLevel: 1, clickWindowMs: 10_000, initialDelayMs: [1000, 4000] });
   assert.deepEqual(trials.map(trial => [trial.level, trial.objects.length, trial.watchDurationMs, trial.hiddenDurationMs])
     .sort((a, b) => a[0] - b[0]), [
     [4, 30, 1500, 1000], [5, 60, 1500, 2000],
@@ -122,7 +122,7 @@ test('records Watch, Hidden, and reappearance timing and keeps the target hidden
     await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
     for (const level of [4, 5]) {
       const scenario = createPlan({ category: 'dynamic-tracking', seed: `occlusion-phases-${level}`, levels: [level],
-        trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
+        trialsPerLevel: 1, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
       await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
       await page.evaluate(() => window.reactBenchEnvironment.start());
       await page.waitForFunction(() => window.reactBenchEnvironment.snapshot().phase === 'watching');
@@ -170,7 +170,7 @@ test('fails clicks during Watch and Hidden without testing against invisible tar
     await page.goto(server.url);
     await page.waitForFunction(() => Boolean(window.reactBenchEnvironment));
     const scenario = createPlan({ category: 'dynamic-tracking', seed: 'premature-occlusion', levels: [4],
-      trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
+      trialsPerLevel: 1, clickWindowMs: 10_000, initialDelayMs: [100, 100] })[0];
     const clickDuring = async phase => {
       await page.evaluate(scenario => window.reactBenchEnvironment.prepare(scenario, 1, 1), scenario);
       await page.evaluate(() => window.reactBenchEnvironment.start());
@@ -230,7 +230,7 @@ test('the privileged control reacquires the target and measures latency from rea
 });
 
 const quickConfig = { category: 'dynamic-tracking', seed: 'reactbench-v1', levels: [1, 2, 3],
-  trialsPerLevel: 1, screenshotsPerSecond: 2, clickWindowMs: 650, initialDelayMs: [100, 200] };
+  trialsPerLevel: 1, clickWindowMs: 650, initialDelayMs: [100, 200] };
 
 test('runs all visible levels through the common oracle, logs, and category summary', { timeout: 20_000 }, async () => {
   const output = await mkdtemp(join(tmpdir(), 'reactbench-dynamic-'));
@@ -298,18 +298,11 @@ test('grades the first incorrect moving-object click at an occlusion level and d
 test('grades against moving ground truth at click registration when an observation is stale', { timeout: 15_000 }, async () => {
   class StaleObservation extends OracleAdapter {
     metadata = { name: 'stale-observation-fixture', model: null, access: 'privileged-oracle' };
-    initialObservationId;
-    async prepare(context) { this.initialObservationId = context.observe()?.id; }
     async run(context) {
       await this.waitForActive(context);
-      let image;
-      do {
-        image = context.observe();
-        if (image?.id === this.initialObservationId) await sleep(30);
-      } while (!image || image.id === this.initialObservationId);
       const observedTarget = (await context.oracle.snapshot()).objects.find(object => object.role === 'required');
       await sleep(400);
-      await context.input.click(observedTarget.x, observedTarget.y, image.id);
+      await context.input.click(observedTarget.x, observedTarget.y);
     }
   }
   const report = await runBenchmark({
@@ -322,9 +315,7 @@ test('grades against moving ground truth at click registration when an observati
   assert.equal(trial.outcome, 'wrong');
   assert.equal(click.clickedObjectId, null);
   assert.ok(Math.hypot(click.x - registeredTarget.x, click.y - registeredTarget.y) > registeredTarget.radius);
-  const linkedFrame = trial.observations.find(frame => frame.id === trial.actions[0].observationId);
-  assert.ok(linkedFrame);
-  assert.ok(linkedFrame.deliveries.length > 0);
+  assert.equal('observations' in trial, false);
 });
 
 test('records required-response expiration without inventing a click', { timeout: 15_000 }, async () => {

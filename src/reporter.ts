@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, open, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { taskRegistry } from './registry.js';
 import type { Category, Level, RunReport, RunSummary, TrialResult } from './types.js';
@@ -72,15 +72,16 @@ export function renderReport(report: RunReport): string {
 <title>ReactBench · ${categoryTitle} results</title><style>
 body{font:15px/1.6 system-ui,sans-serif;color:#20252e;background:#f5f6f8;max-width:1080px;margin:48px auto;padding:0 24px}h1{font-size:32px;letter-spacing:-.03em}h2{margin-top:36px;font-size:20px}p{max-width:75ch}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #dce0e5}th{font-size:12px}code{overflow-wrap:anywhere}details{margin-top:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.scroll{overflow-x:auto}.note{padding:18px;background:#fff}dt{color:#616a76}dd{margin:0 0 12px}a{color:#245b8b;text-underline-offset:3px}
  </style></head><body><p>ReactBench / ${categoryTitle}</p><h1>${control ? 'Control baseline' : 'Visual agent'} results</h1>
-<p class="note">${control ? 'Privileged oracle. This setup reads hidden environment state and is excluded from fair visual-agent comparisons.' : 'Visual-agent access through the screenshot/action contract.'}</p>
+<p class="note">${control ? 'Privileged oracle. This setup reads hidden environment state and is excluded from fair visual-agent comparisons.' : 'External agent uses its own browser/computer tools. Task scores use browser-registered events.'}</p>
 <p>${crowdingNote}</p>
+<p>Run status: ${report.status}. Recorded ${report.trials.length} of ${report.plannedTrials} planned trials. Cancelled runs are incomplete.</p>
 <p><strong>${report.summary.correct} / ${report.summary.total}</strong> correct · ${inhibitory ? 'Valid go-response' : 'Successful-response'} median: ${duration(report.summary.medianReactionLatencyMs)} · P95: insufficient samples (unavailable in this initial slice).</p>
 <p>${inhibitory ? 'Latency includes successful go responses only. Withholding has no click time and receives no reaction latency.' : 'Median includes successful responses only.'} Failures remain in the counts. Timings measure software activation to browser input registration, not physical display onset.</p>
 <h2>By difficulty</h2><div class="scroll"><table><thead><tr><th>Level</th>${showObjectCounts ? '<th>Objects</th>' : ''}<th>Correct / total</th><th>Successful-response median</th></tr></thead><tbody>${report.summary.byLevel.map(level => `<tr><td>${level.level}</td>${showObjectCounts ? `<td>${level.objectsPerTrial ?? 'Unavailable'}</td>` : ''}<td>${level.correct} / ${level.total}</td><td>${duration(level.medianReactionLatencyMs)}</td></tr>`).join('')}</tbody></table></div>
 ${inhibitoryResults}
 <h2>Failures</h2><p>Premature: ${report.summary.failures.premature} · ${targetAcquisition ? 'Wrong choice' : 'Wrong target'}: ${report.summary.failures.wrong} · Expired: ${report.summary.failures.expired}</p>
-<h2>Individual trials</h2><div class="scroll"><table><thead><tr><th>Trial</th><th>Level</th>${inhibitory ? '<th>Condition</th>' : ''}${showObjectCounts ? '<th>Objects</th>' : ''}<th>Outcome</th><th>Response</th><th>Captures</th><th>Achieved capture rate</th></tr></thead><tbody>${report.trials.map(trial => `<tr><td>${escape(trial.id)}</td><td>${trial.scenario.level}</td>${inhibitory && trial.scenario.category === 'inhibitory-control' ? `<td>${trial.scenario.condition}</td>` : ''}${showObjectCounts ? `<td>${trial.scenario.category === 'target-acquisition' || trial.scenario.category === 'dynamic-tracking' ? trial.scenario.objects.length : '—'}</td>` : ''}<td>${escape(trial.conditionOutcome ?? trial.outcome)}</td><td>${duration(trial.timing.reactionLatencyMs)}</td><td>${trial.observations.length}</td><td>${trial.timing.measuredCaptureHz?.toFixed(2) ?? 'Unavailable'} Hz</td></tr>`).join('')}</tbody></table></div>
-<h2>Evaluated setup</h2><dl><dt>Agent</dt><dd>${escape(report.agent.name)}</dd><dt>Model</dt><dd>${escape(report.agent.model ?? 'Unavailable')}</dd><dt>Benchmark / adapter version</dt><dd>${escape(report.benchmark.version)} / ${escape(report.agent.adapterVersion ?? 'Unavailable')}</dd><dt>Source revision</dt><dd>${escape(report.benchmark.gitCommit ?? 'Unavailable')}${report.benchmark.trackedChanges ? ' (tracked changes present)' : ''}</dd><dt>Display / input</dt><dd>1280 × 720 · scale 1 · ${escape(report.environment.actionInterface)}</dd><dt>Browser / Playwright</dt><dd>${escape(report.environment.browserVersion)} / ${escape(report.benchmark.playwrightVersion)}</dd><dt>Hardware</dt><dd>${escape(report.environment.cpu)} · ${report.environment.cpuCount} logical CPUs · ${escape(report.environment.platform)} / ${escape(report.environment.architecture)}</dd><dt>Internal model processing</dt><dd>Unavailable</dd></dl>
+<h2>Individual trials</h2><div class="scroll"><table><thead><tr><th>Trial</th><th>Level</th>${inhibitory ? '<th>Condition</th>' : ''}${showObjectCounts ? '<th>Objects</th>' : ''}<th>Outcome</th><th>Response</th></tr></thead><tbody>${report.trials.map(trial => `<tr><td>${escape(trial.id)}</td><td>${trial.scenario.level}</td>${inhibitory && trial.scenario.category === 'inhibitory-control' ? `<td>${trial.scenario.condition}</td>` : ''}${showObjectCounts ? `<td>${trial.scenario.category === 'target-acquisition' || trial.scenario.category === 'dynamic-tracking' ? trial.scenario.objects.length : '—'}</td>` : ''}<td>${escape(trial.conditionOutcome ?? trial.outcome)}</td><td>${duration(trial.timing.reactionLatencyMs)}</td></tr>`).join('')}</tbody></table></div>
+<h2>Evaluated setup</h2><dl><dt>Agent</dt><dd>${escape(report.agent.name)}</dd><dt>Browser/computer tool</dt><dd>${escape(report.agent.tool ?? 'Unavailable')}</dd><dt>Agent context policy</dt><dd>${escape(report.agent.contextPolicy ?? 'Unavailable')}</dd><dt>Model</dt><dd>${escape(report.agent.model ?? 'Unavailable')}</dd><dt>Benchmark / adapter version</dt><dd>${escape(report.benchmark.version)} / ${escape(report.agent.adapterVersion ?? 'Unavailable')}</dd><dt>Source revision</dt><dd>${escape(report.benchmark.gitCommit ?? 'Unavailable')}${report.benchmark.trackedChanges ? ' (tracked changes present)' : ''}</dd><dt>Display / input</dt><dd>${report.environment.viewport ? `${report.environment.viewport.width} × ${report.environment.viewport.height}` : 'Unavailable'} · scale ${report.environment.deviceScaleFactor ?? 'Unavailable'} · ${escape(report.environment.actionInterface)}</dd><dt>Browser / Playwright</dt><dd>${escape(report.environment.browserVersion ?? 'Unavailable')} / ${escape(report.benchmark.playwrightVersion)}</dd><dt>Hardware</dt><dd>${escape(report.environment.cpu)} · ${report.environment.cpuCount} logical CPUs · ${escape(report.environment.platform)} / ${escape(report.environment.architecture)}</dd><dt>Internal model processing</dt><dd>Unavailable</dd></dl>
 <p><a href="results.json">Run data (JSON)</a> · <a href="trials.jsonl">Trial logs (JSONL)</a></p>
 <details><summary>Configuration and provenance</summary><pre>${escape(JSON.stringify({ runId: report.runId, benchmark: report.benchmark, config: report.config, environment: report.environment }, null, 2))}</pre></details>
 </body></html>`;
@@ -88,9 +89,20 @@ ${inhibitoryResults}
 
 export async function writeReport(report: RunReport, outputDir: string): Promise<void> {
   await mkdir(outputDir, { recursive: true });
-  await Promise.all([
-    writeFile(join(outputDir, 'results.json'), JSON.stringify(report, null, 2) + '\n', { flag: 'wx' }),
-    writeFile(join(outputDir, 'trials.jsonl'), report.trials.map(trial => JSON.stringify(trial)).join('\n') + '\n', { flag: 'wx' }),
-    writeFile(join(outputDir, 'report.html'), renderReport(report), { flag: 'wx' }),
-  ]);
+  const written: string[] = [];
+  try {
+    for (const [name, content] of [
+      ['results.json', JSON.stringify(report, null, 2) + '\n'],
+      ['trials.jsonl', report.trials.map(trial => JSON.stringify(trial)).join('\n') + '\n'],
+      ['report.html', renderReport(report)],
+    ] as const) {
+      const file = join(outputDir, name);
+      const handle = await open(file, 'wx');
+      written.push(file);
+      try { await handle.writeFile(content); } finally { await handle.close(); }
+    }
+  } catch (error) {
+    await Promise.all(written.map(file => rm(file, { force: true })));
+    throw error;
+  }
 }

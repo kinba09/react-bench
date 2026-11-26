@@ -16,7 +16,8 @@ const phaseCountdown = document.querySelector<HTMLElement>('#phase-countdown')!;
 const categoryTitle = document.querySelector<HTMLElement>('#category-title')!;
 const categorySubtitle = document.querySelector<HTMLElement>('#category-subtitle')!;
 const controlled = new URLSearchParams(location.search).has('controlled');
-document.querySelector<HTMLElement>('#practice-controls')!.hidden = controlled;
+const sessionMode = location.pathname.startsWith('/session/');
+document.querySelector<HTMLElement>('#practice-controls')!.hidden = controlled || sessionMode;
 const access = new URLSearchParams(location.search).get('access');
 document.querySelector<HTMLElement>('#mode')!.textContent = !controlled ? 'Local practice'
   : access === 'privileged-oracle' ? 'Oracle control baseline' : 'Visual agent evaluation';
@@ -34,6 +35,7 @@ let hiddenDeadline = 0;
 let deadline = 0;
 let animation = 0;
 let keepTargetsHiddenAfterFinish = false;
+let trialComplete: (() => void) | undefined;
 
 function reflectedPosition(value: number, minimum: number, maximum: number): number {
   const span = maximum - minimum;
@@ -238,6 +240,7 @@ function finish(message: string): void {
   instruction.textContent = message;
   draw();
   document.querySelector<HTMLButtonElement>('#start')!.disabled = false;
+  trialComplete?.();
 }
 function finishExpiredWindow(now: number): void {
   record('expired', now, { deadlineAtMs: deadline });
@@ -403,8 +406,14 @@ const environment: BrowserEnvironment = {
     return structuredClone({ trialId: scenario.id, phase, nowMs, target, objects, reference: referenceValue,
       ...(scenario.category === 'inhibitory-control' ? { condition: scenario.condition } : {}), events });
   },
+  cancel() {
+    cancelAnimationFrame(animation);
+    phase = 'complete';
+    phaseCountdown.hidden = true;
+    draw();
+  },
 };
-window.reactBenchEnvironment = environment;
+if (!sessionMode) window.reactBenchEnvironment = environment;
 document.addEventListener('click', event => {
   const prematureDynamicPhase = scenario.category === 'dynamic-tracking'
     && (phase === 'waiting' || phase === 'watching' || phase === 'hidden');
@@ -480,4 +489,10 @@ document.querySelector<HTMLButtonElement>('#start')!.addEventListener('click', (
 });
 document.querySelector<HTMLElement>('#rules')!.textContent = taskRegistry['visual-reaction'].instructions;
 environment.prepare(createPlan({ ...defaultConfigFor('visual-reaction'), levels: [1], trialsPerLevel: 1 })[0]!, 1, 1);
+document.querySelector<HTMLButtonElement>('#start')!.disabled = controlled || sessionMode;
+document.querySelector<HTMLElement>('#startup-notice')!.hidden = true;
+if (sessionMode) {
+  const { connectSession } = await import('./session-client.js');
+  await connectSession(environment, callback => { trialComplete = callback; });
+}
 window.addEventListener('resize', () => draw());

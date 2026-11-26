@@ -21,7 +21,8 @@ test('runs the real five-level Visual Reaction profile through browser input and
     assert.equal(report.environment.viewport.width, 1280);
     assert.equal(report.environment.viewport.height, 720);
     assert.equal(report.environment.deviceScaleFactor, 1);
-    assert.equal(report.config.screenshotsPerSecond, 2);
+    assert.equal('screenshotsPerSecond' in report.config, false);
+    assert.equal(report.schemaVersion, 2);
     assert.deepEqual(report.summary.byLevel.map(x => [x.level, x.total]), [[1, 3], [2, 3], [3, 3], [4, 3], [5, 3]]);
     for (const trial of report.trials) {
       assert.equal(trial.outcome, 'success');
@@ -31,7 +32,7 @@ test('runs the real five-level Visual Reaction profile through browser input and
       assert.equal(trial.timing.measurement, 'software-activation-to-input-handler');
       assert.equal(trial.timing.modelProcessingMs, null);
       assert.ok(trial.timing.preparationMs >= 0);
-      assert.ok(trial.observations.length >= 2);
+      assert.equal('observations' in trial, false);
       const active = trial.events.find(x => x.type === 'activated');
       const click = trial.events.find(x => x.type === 'action-registered');
       assert.equal(active.clock, 'browser-performance');
@@ -39,11 +40,7 @@ test('runs the real five-level Visual Reaction profile through browser input and
       assert.equal(trial.timing.reactionLatencyMs, click.atMs - active.atMs);
       assert.equal(click.inputTrusted, true);
       assert.equal(trial.actions.length, 1);
-      for (const frame of trial.observations) {
-        assert.ok(frame.returnedAtMs >= frame.requestedAtMs);
-        assert.equal(frame.clock, 'runner-performance');
-        assert.equal(frame.exactCaptureAtMs, null);
-      }
+
     }
     const saved = JSON.parse(await readFile(join(output, 'results.json'), 'utf8'));
     assert.equal(saved.runId, report.runId);

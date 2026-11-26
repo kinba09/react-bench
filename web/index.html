@@ -12,6 +12,10 @@
 <body>
   <header><span class="wordmark">ReactBench<span class="wordmark-dot"></span></span><span class="mode" id="mode">Local practice</span></header>
   <main>
+    <section id="startup-notice" data-control role="status">
+      <h2>Start ReactBench locally</h2>
+      <p>If the game does not load, run <code>npm run session</code> in the project folder and open the printed local address. Opening this HTML file directly does not run the game.</p>
+    </section>
     <section class="introduction">
       <div><h1 id="category-title">Visual Reaction</h1><p id="category-subtitle">Wait for green.<br> Make one precise click.</p></div>
       <div class="trial-info"><span id="progress">Trial 1 of 1</span><strong id="level-label">Level 1</strong></div>
@@ -33,8 +37,23 @@
       <select id="practice-category" aria-label="Practice game"><option value="visual-reaction">Visual Reaction</option><option value="target-acquisition">Target Acquisition</option><option value="dynamic-tracking">Dynamic Tracking</option><option value="inhibitory-control">Inhibitory Control</option></select>
       <label for="practice-level">Difficulty</label>
       <select id="practice-level" aria-label="Practice difficulty"><option value="1">Level 1 · 5 seconds</option><option value="2">Level 2 · 4 seconds</option><option value="3">Level 3 · 3 seconds</option><option value="4">Level 4 · 2 seconds</option><option value="5">Level 5 · 1 second</option></select>
-      <button type="button" id="start">Start trial</button>
+      <button type="button" id="start" disabled>Start trial</button>
     </form>
+    <section id="session-controls" class="session-controls" data-control hidden aria-label="Evaluation session">
+      <div class="session-heading"><h2>Evaluation session</h2><span id="session-id"></span></div>
+      <p id="session-message" role="status">Connecting to the session…</p>
+      <div class="session-actions">
+        <button type="button" id="session-start" disabled>Start trial 1</button>
+        <button type="button" id="session-next" hidden disabled>Prepare next trial</button>
+        <button type="button" id="session-retry" hidden>Retry</button>
+        <button type="button" id="session-cancel" class="secondary">Cancel session</button>
+      </div>
+      <nav id="session-downloads" aria-label="Session results" hidden>
+        <a data-file="report.html" target="_blank" rel="noopener">Open report</a>
+        <a data-file="results.json" download="results.json">Run data (JSON)</a>
+        <a data-file="trials.jsonl" download="trials.jsonl">Trial logs (JSONL)</a>
+      </nav>
+    </section>
   </main>
   <footer><span>Local, deterministic browser tasks</span><span>ReactBench · v0.1</span></footer>
 </body>
