@@ -63,6 +63,8 @@ Reaction latency is the elapsed browser time from the scoring-window onset to th
 
 The files are saved to `--output` or a new timestamped directory under `results`. After completion or cancellation, the same files are available under `/api/session/<session-id>/` while the server runs. Keep the exported files together when opening the offline report. Report `comparisonClass` identifies `visual` browser sessions and `control-only` runs from the credential-free privileged oracle. When sharing results, identify scripted fixture runs as such. The agent name, model, client, tool, and context policy are operator-provided. The browser reports viewport size, device scale factor, and its own user-agent string. CPU and platform metadata describe the runner host. Use matched seeds, configurations, display settings, and tool/context profiles for comparisons.
 
+The [timing validation guide](timing-validation.md) covers delayed observations, decisions, in-flight native input, scrolling hit tests, cancellation, display profiles, and schema-1 historical evidence.
+
 ## Trust boundary
 
 The visible rules and controls disclose the information the participant needs to play. They do not reveal hidden ground truth or upcoming scenarios, and scored pages do not expose the practice and oracle snapshot interface. The renderer still receives current scenario data, including information that a local inspector could use to infer hidden details. The future trial plan stays on the server. Use the visible page and ordinary input for scored comparisons. ReactBench assumes a trusted local participant and offers no host-level or network isolation from arbitrary local tools.

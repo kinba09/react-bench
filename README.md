@@ -6,7 +6,7 @@ A local benchmark for evaluating how accurately and quickly computer-use agents 
 
 ReactBench runs the benchmark game in a browser. An evaluated agent opens or attaches to that browser using its own browser/computer tools, reads the on-page instructions, and plays. The agent owns observation and input, including any screenshots it chooses to take. ReactBench records game events, input registration, deadlines, outcomes, and scores; it does not supply screenshots, continuously capture frames, or require a custom screenshot/action bridge in the intended evaluation flow.
 
-**Implementation status:** Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. The browser session implementation is ready for review in [#11](https://github.com/kinba09/react-bench/issues/11). Genuine Codex and Claude runs remain unvalidated.
+**Implementation status:** Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. The browser session implementation is merged; [native timing validation](docs/timing-validation.md) covers slow participants and pending input. Genuine Codex and Claude runs remain unvalidated.
 
 See the [implementation plan](docs/plan.md) for priorities and parallel work.
 
@@ -114,6 +114,7 @@ Tests exercise real Chromium through the public runner-to-report boundary: defau
 
 - [Implementation plan](docs/plan.md): browser-session migration, priorities, dependencies, and parallel work.
 - [Browser session guide](docs/browser-sessions.md): agent setup, trial lifecycle, scoring evidence, and exports.
+- [Native timing validation](docs/timing-validation.md): slow participants, cancellation, browser clocks, display profiles, and historical reports.
 - [MVP specification](docs/spec.md): scope, requirements, and behavioral validation.
 - [Design specification](docs/design.md): six game categories, five difficulty levels, initial timing settings, scoring rules, and agent integration plans.
 - [Domain glossary](GLOSSARY.md): agreed project terminology.
