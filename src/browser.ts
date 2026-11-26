@@ -137,14 +137,16 @@ function draw(nowMs = performance.now()): void {
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, rect.width, rect.height);
-  if (scenario.category === 'visual-reaction') {
+  if (scenario.category === 'visual-reaction' || scenario.category === 'inhibitory-control') {
     target = { x: rect.left + rect.width * scenario.target.u,
       y: rect.top + rect.height * scenario.target.v, radius: scenario.target.radius };
     objects = [];
     referenceValue = null;
     context.beginPath();
     context.arc(target.x - rect.left, target.y - rect.top, target.radius, 0, Math.PI * 2);
-    context.fillStyle = phase === 'active' ? '#15804c' : phase === 'complete' ? '#7c8591' : '#cc423a';
+    context.fillStyle = phase === 'complete' ? '#7c8591'
+      : scenario.category === 'visual-reaction' ? phase === 'active' ? '#15804c' : '#cc423a'
+        : phase === 'active' ? scenario.condition === 'go' ? '#15804c' : '#cc423a' : '#aeb6c0';
     context.fill();
     context.beginPath();
     context.arc(target.x - rect.left, target.y - rect.top, 4, 0, Math.PI * 2);
@@ -231,6 +233,13 @@ function finish(message: string): void {
   draw();
   document.querySelector<HTMLButtonElement>('#start')!.disabled = false;
 }
+function finishExpiredWindow(now: number): void {
+  record('expired', now, { deadlineAtMs: deadline });
+  const graded = grade(events, scenario);
+  result.textContent = graded.conditionOutcome === 'withheld' ? 'Withheld'
+    : graded.conditionOutcome === 'go-omission' ? 'Go omission' : 'No response';
+  finish(graded.conditionOutcome === 'withheld' ? 'Correctly withheld.' : 'Response window expired.');
+}
 function frame(): void {
   const now = performance.now();
   if (phase === 'waiting' && now >= plannedActivation) {
@@ -245,15 +254,18 @@ function frame(): void {
     } else if (scenario.category === 'target-acquisition') {
       status.textContent = 'Find the match';
       instruction.textContent = 'Click the object that matches the reference symbol.';
+    } else if (scenario.category === 'inhibitory-control') {
+      const remaining = Math.max(1, Math.ceil((deadline - now) / 1000));
+      status.textContent = `${scenario.condition === 'go' ? 'Go' : 'No-go'} · ${remaining} s`;
+      lastCountdownSecond = remaining;
+      instruction.textContent = scenario.condition === 'go' ? 'Green cue: click the target once.' : 'Red cue: do not click until the response window ends.';
     } else {
       status.textContent = 'Green';
       instruction.textContent = 'Click the target now.';
     }
   }
   if (phase === 'active' && now >= deadline) {
-    record('expired', now, { deadlineAtMs: deadline });
-    result.textContent = 'No response';
-    finish('Response window expired.');
+    finishExpiredWindow(now);
   }
   if (phase !== 'complete') {
     if (scenario.category === 'dynamic-tracking') {
@@ -261,6 +273,12 @@ function frame(): void {
       if (phase === 'active') {
         const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
         if (remaining !== lastCountdownSecond) { status.textContent = `Moving · ${remaining} s`; lastCountdownSecond = remaining; }
+      }
+    } else if (scenario.category === 'inhibitory-control' && phase === 'active') {
+      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+      if (remaining !== lastCountdownSecond) {
+        status.textContent = `${scenario.condition === 'go' ? 'Go' : 'No-go'} · ${remaining} s`;
+        lastCountdownSecond = remaining;
       }
     }
     animation = requestAnimationFrame(frame);
@@ -286,11 +304,13 @@ const environment: BrowserEnvironment = {
     const task = taskRegistry[scenario.category];
     categoryTitle.textContent = task.title;
     categorySubtitle.textContent = scenario.category === 'target-acquisition'
-      ? 'Match the reference symbol. Choose once.' : scenario.category === 'dynamic-tracking' ? 'Track the star as it moves among distractors.' : 'Wait for green. Make one precise click.';
+      ? 'Match the reference symbol. Choose once.' : scenario.category === 'dynamic-tracking' ? 'Track the star as it moves among distractors.'
+        : scenario.category === 'inhibitory-control' ? 'Click on green. Withhold on red.' : 'Wait for green. Make one precise click.';
     document.title = `${task.title} · ReactBench`;
     canvas.classList.toggle('acquisition', scenario.category === 'target-acquisition');
     canvas.setAttribute('aria-label', scenario.category === 'target-acquisition'
-      ? 'Choose the symbol that matches the reference.' : scenario.category === 'dynamic-tracking' ? 'Click the moving star shown in the reference.' : 'Click the circular target only after it turns green.');
+      ? 'Choose the symbol that matches the reference.' : scenario.category === 'dynamic-tracking' ? 'Click the moving star shown in the reference.'
+        : scenario.category === 'inhibitory-control' ? 'Respond to green cues and withhold from red cues.' : 'Click the circular target only after it turns green.');
     reference.hidden = scenario.category !== 'target-acquisition';
     if (scenario.category === 'target-acquisition') paintReference(scenario.reference.symbol);
     draw();
@@ -306,6 +326,12 @@ const environment: BrowserEnvironment = {
       record('started', now, { plannedActivationAtMs: plannedActivation });
       status.textContent = 'Red';
       instruction.textContent = 'Wait. The target will turn green.';
+    } else if (scenario.category === 'inhibitory-control') {
+      phase = 'waiting';
+      plannedActivation = now + scenario.initialDelayMs;
+      record('started', now, { plannedActivationAtMs: plannedActivation });
+      status.textContent = 'Ready';
+      instruction.textContent = 'Wait for the cue. Green means click; red means withhold.';
     } else {
       phase = 'waiting';
       plannedActivation = now + scenario.initialDelayMs;
@@ -326,7 +352,8 @@ const environment: BrowserEnvironment = {
       return structuredClone({ trialId: scenario.id, phase, nowMs, target: { x: required.x, y: required.y, radius: required.radius },
         objects: moving, requiredTargetId: scenario.requiredTargetId, reference: null, events });
     }
-    return structuredClone({ trialId: scenario.id, phase, nowMs, target, objects, reference: referenceValue, events });
+    return structuredClone({ trialId: scenario.id, phase, nowMs, target, objects, reference: referenceValue,
+      ...(scenario.category === 'inhibitory-control' ? { condition: scenario.condition } : {}), events });
   },
 };
 window.reactBenchEnvironment = environment;
@@ -334,9 +361,7 @@ document.addEventListener('click', event => {
   if ((event.target as Element).closest('[data-control]') || (phase !== 'waiting' && phase !== 'active')) return;
   const now = performance.now();
   if (phase === 'active' && now >= deadline) {
-    record('expired', now, { deadlineAtMs: deadline });
-    result.textContent = 'No response';
-    finish('Response window expired.');
+    finishExpiredWindow(now);
     return;
   }
   if (scenario.category === 'dynamic-tracking') {
@@ -345,9 +370,20 @@ document.addEventListener('click', event => {
     const hit = clicked?.id === scenario.requiredTargetId;
     record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted,
       objects, requiredTargetId: scenario.requiredTargetId, clickedObjectId: clicked?.id ?? null });
-    const { outcome, reactionLatencyMs } = grade(events);
+    const { outcome, reactionLatencyMs } = grade(events, scenario);
     result.textContent = reactionLatencyMs === null ? outcome : `${Math.round(reactionLatencyMs)} ms`;
     finish(outcome === 'success' ? 'Required target hit.' : outcome === 'premature' ? 'Too soon. Wait for the moving field.' : 'Incorrect click. This trial is complete.');
+    return;
+  }
+
+  if (scenario.category === 'inhibitory-control') {
+    const hit = scenario.condition === 'go' && Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
+    record('action-registered', now, { x: event.clientX, y: event.clientY, hit, inputTrusted: event.isTrusted });
+    const graded = grade(events, scenario);
+    result.textContent = graded.reactionLatencyMs === null ? graded.conditionOutcome ?? graded.outcome : `${Math.round(graded.reactionLatencyMs)} ms`;
+    finish(graded.conditionOutcome === 'forbidden-click' ? 'A red cue forbids clicking. Trial complete.'
+      : graded.conditionOutcome === 'go-premature-click' ? 'Too soon. Wait for the cue.'
+        : graded.conditionOutcome === 'go-wrong-click' ? 'Incorrect target. Trial complete.' : 'Green cue answered. Trial complete.');
     return;
   }
 
@@ -359,7 +395,7 @@ document.addEventListener('click', event => {
     : Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
   record('action-registered', now, { x: event.clientX, y: event.clientY, hit,
     ...(objectIndex >= 0 ? { objectIndex } : {}), inputTrusted: event.isTrusted });
-  const { outcome, reactionLatencyMs } = grade(events);
+  const { outcome, reactionLatencyMs } = grade(events, scenario);
   result.textContent = reactionLatencyMs === null ? outcome : `${Math.round(reactionLatencyMs)} ms`;
   finish({ success: scenario.category === 'target-acquisition' ? 'Correct match. Trial complete.' : 'Target hit. Trial complete.',
     premature: scenario.category === 'target-acquisition' ? 'Too soon. Wait for “Find the match.”' : 'Too soon. Wait for green.',
