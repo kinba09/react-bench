@@ -152,6 +152,7 @@ export interface AgentMetadata {
   adapterVersion?: string | null;
   access: 'privileged-oracle' | 'visual';
   tool?: string;
+  client?: string;
   contextPolicy?: string;
 }
 export interface VisualAdapter {

@@ -8,7 +8,7 @@ Researchers and agent developers need to understand how accurately, quickly, and
 
 They need a reproducible local benchmark that measures the complete perception, decision, and action loop, supports different clients and model providers, and makes its measurement limits visible. Users should be able to evaluate subscription clients, API-backed agents, and locally hosted agents through comparable observation and action rules without requiring a particular commercial account.
 
-Current implementation includes browser practice, Visual Reaction, Target Acquisition, all five Dynamic Tracking levels, and Inhibitory Control with go, no-go, and delayed-stop. The privileged offline oracle produces reports for these games. Visual Reaction, Target Acquisition, and Dynamic Tracking support scored browser sessions with visible readiness, native-tool input, cancellation, and exports. The default is three seeded level-1 Visual Reaction trials. Continuous screenshot capture has been removed from session and oracle execution. Other-game sessions and genuine client validation remain in #10/#11 and #12/#13.
+All four implemented games support browser practice, the privileged offline oracle, and scored browser sessions with visible readiness, native-tool input, cancellation, and exports. These games are Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control with go, no-go, and delayed-stop. The default session runs three seeded level-1 Visual Reaction trials. Issue #11 is implemented pending review. See the [browser session guide](browser-sessions.md) for the operating and export contract. Broader timing validation and genuine client runs remain in #10 and #12/#13.
 
 ## Solution
 
@@ -52,7 +52,7 @@ Provide a browser evaluation session with visible instructions/readiness, seeded
 32. As an evaluator, I want correct withholding counted as success on no-go and stop trials, so that intentional inaction is not treated as a timeout failure.
 33. As an agent participant, I want instructions and reference targets before signaling readiness, so that preparation is separate from the reaction task.
 34. As an evaluator, I want game state reset between trials and the external agent-context policy recorded, so that isolation claims are explicit and verifiable.
-35. As an evaluator, I want completed trials closed to scoring and an inter-trial readiness/quiescence policy, so that pending external input cannot silently affect the next trial; attribution depends on what the agent tool exposes.
+35. As an evaluator, I want completed trials closed to scoring and explicit acknowledgement that pending tool actions have finished before preparing the next trial. Late input cancellation and attribution depend on the external tool or operator.
 36. As a researcher, I want identical seeds and scenario ordering across compared agents, so that differences do not come from different generated tasks.
 37. As a researcher, I want matched browser/display and game settings with declared tool/context policies, so that comparable complete agent setups can be identified.
 38. As an evaluator, I want hidden state and future scenarios excluded from participant-facing instructions and controls, so that agents solve the visual task.
@@ -172,7 +172,7 @@ Provide a browser evaluation session with visible instructions/readiness, seeded
 
 - This specification incorporates the latest browser-first decision: agents own observation/input through their tools, and ReactBench owns the task and scoring. This supersedes earlier screenshot-feed/MCP-bridge requirements while retaining six categories, five levels, binary tracking hits, reacquisition, and three trials per level.
 - Preserve modular game/session/grading/reporting boundaries, deterministic scoring, oracle separation, reproducibility, licensing, contribution guidance, and credential-free CI.
-- See [the implementation plan](plan.md) for the remaining session coverage, lifecycle validation, and genuine Codex and Claude runs.
+- See [the implementation plan](plan.md) for the remaining games, lifecycle validation, and genuine Codex and Claude runs.
 - Codex CLI and Claude Code remain planned client targets. Their native browser/computer tools and session attachment must be validated; this plan does not establish live compatibility.
 - Label reports as fixture, privileged oracle, or genuine external-agent data. Oracle reports exist; no genuine external-agent session has been validated.
 - Publication target is GitHub Issues in kinba09/react-bench with the ready-for-agent label. The user confirmed the testing boundary; there is no additional product interview or triage requirement.

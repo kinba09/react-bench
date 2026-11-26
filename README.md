@@ -6,7 +6,7 @@ A local benchmark for evaluating how accurately and quickly computer-use agents 
 
 ReactBench runs the benchmark game in a browser. An evaluated agent opens or attaches to that browser using its own browser/computer tools, reads the on-page instructions, and plays. The agent owns observation and input, including any screenshots it chooses to take. ReactBench records game events, input registration, deadlines, outcomes, and scores; it does not supply screenshots, continuously capture frames, or require a custom screenshot/action bridge in the intended evaluation flow.
 
-**Implementation status:** Visual Reaction, Target Acquisition, and Dynamic Tracking support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. Inhibitory Control currently runs in practice or through the privileged offline oracle. Neither session nor oracle execution captures screenshots. Genuine Codex/Claude runs remain unvalidated.
+**Implementation status:** Visual Reaction, Target Acquisition, Dynamic Tracking, and Inhibitory Control support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. The browser session implementation is ready for review in [#11](https://github.com/kinba09/react-bench/issues/11). Genuine Codex and Claude runs remain unvalidated.
 
 See the [implementation plan](docs/plan.md) for priorities and parallel work.
 
@@ -29,25 +29,28 @@ Dependencies and Chromium require a download during initial setup. After setup, 
 npm run session
 ```
 
-This opens a local browser page with three seeded Visual Reaction trials at level 1. Let your agent operate that page with its own browser/computer tools. ReactBench supplies no screenshots or task-input tools. Read the rules and press **Start trial 1**. After each result, finish pending tool actions, choose **Prepare next trial**, then explicitly start the next trial. Preparing does not start its deadline.
+This opens a local browser page with three seeded Visual Reaction trials at level 1. Let your agent operate that page with its own browser/computer tools. Read the rules and press **Start trial 1**. After each result, finish pending tool actions, check **Pending tool actions have finished**, and choose **Prepare next trial**. Start the next trial when ready. The [browser session guide](docs/browser-sessions.md) includes an agent prompt, the session lifecycle, and the export contract.
 
 Open the local address from the command, rather than `web/index.html` directly. The game needs its compiled JavaScript served by the local server; a `file://` page cannot run it.
 
 ```sh
-npm run session -- --seed experiment-a --output results/session-a --agent my-agent --tool my-browser-tool
+npm run session -- --seed experiment-a --output results/session-a --agent my-agent --tool my-browser-tool --client my-client
 npm run session -- --no-open --port 0
 npm run session -- --config configs/browser-session.json
 npm run session -- --config configs/target-acquisition.json
 npm run session -- --config configs/dynamic-tracking.json
+npm run session -- --config configs/inhibitory-control.json
 ```
 
 The Target Acquisition example runs three seeded trials at each of five levels. The page shows the reference symbol during preparation, then reveals the board after the seeded wait. The agent has ten seconds to click the matching object. The first click ends the trial.
 
 The Dynamic Tracking example runs three seeded trials at each of five levels. At levels 4 and 5, wait through Watch and Hidden, then click the star after it reappears. Earlier clicks end the trial as premature. Reports retain the browser phase events and measure successful reaction time from reappearance.
 
+The Inhibitory Control example runs one go, one no-go, and one delayed-stop trial per level. Reports distinguish valid go responses, successful withholding, and clicks before or after a stop signal.
+
 `--no-open` prints the URL for an agent that opens its own browser; `--port 0` selects an available port. Opening the page does not claim the session: the first participant to press Start claims it. Use that same tab for the rest of the run. Reloading during an active trial cannot restart or recover it; cancel and create a new session. The server stays available for report downloads until Ctrl+C. **Cancel session** saves an incomplete report containing finished trials only.
 
-The page resets game state between trials; external tooling owns agent-context resets and pending-action cancellation. A native click does not identify its originating trial. Explicit preparation/start and a short inter-trial pause prevent automatic progression, but do not guarantee cancellation of arbitrarily delayed tool input. Stop pending actions before continuing. Local participants are trusted; browser-submitted event traces are regraded by the server, not tamper-proof against malicious local code.
+The page resets game state between trials. External tools or operators manage agent-context resets and pending-action cancellation. Use `--context-policy` to record the actual reset policy. A fixed pause cannot cancel arbitrary pending tool input. Check the readiness acknowledgement only after pending actions have drained or been cancelled. The server grades traces from trusted local participants.
 
 Results are written to a new output directory and linked on the completed page. Report schema **2** removes required screenshot observations/cadence, records actual per-trial display settings, and leaves external tool dispatch/model timings unavailable. Older configurations must remove `screenshotsPerSecond`; unknown options are rejected.
 
@@ -110,13 +113,14 @@ Tests exercise real Chromium through the public runner-to-report boundary: defau
 ## Design documents
 
 - [Implementation plan](docs/plan.md): browser-session migration, priorities, dependencies, and parallel work.
+- [Browser session guide](docs/browser-sessions.md): agent setup, trial lifecycle, scoring evidence, and exports.
 - [MVP specification](docs/spec.md): scope, requirements, and behavioral validation.
 - [Design specification](docs/design.md): six game categories, five difficulty levels, initial timing settings, scoring rules, and agent integration plans.
 - [Domain glossary](GLOSSARY.md): agreed project terminology.
 
-The broader MVP design covers 90 trials: six categories × five levels × three trials. Issues #2–#5 implement Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels. Issues #6 and #7 implement Inhibitory Control go, no-go, and delayed-stop for practice and the offline oracle.
+The broader MVP design covers 90 trials: six categories × five levels × three trials. Issues #2–#5 implement Visual Reaction, Target Acquisition, and all five Dynamic Tracking levels. Issues #6 and #7 implement Inhibitory Control go, no-go, and delayed-stop. All four categories support practice, the offline oracle, and scored browser sessions.
 
-Planned integrations let Codex CLI, Claude Code, and custom API-backed, local, or existing computer-use agents operate the benchmark browser with their own tools. Optional launch helpers manage setup and lifecycle; ReactBench does not provide their screenshot or action tools. The privileged scripted oracle supports the current offline slice and remains separate from evaluated visual-agent results.
+Custom API-backed and local agents with their own browser tools can use the session flow. Optional launch helpers can handle setup and lifecycle. Codex CLI and Claude Code validation remains in [#12](https://github.com/kinba09/react-bench/issues/12) and [#13](https://github.com/kinba09/react-bench/issues/13).
 
 ## License
 
