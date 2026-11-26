@@ -91,8 +91,9 @@ async function runTrial(browser: Browser, url: string, scenario: Scenario, index
     const last = observations.records.at(-1);
     const measuredCaptureHz = first && last && first !== last
       ? (observations.records.length - 1) * 1000 / (last.requestedAtMs - first.requestedAtMs) : null;
-    const graded = grade(snapshot.events);
-    return { id: scenario.id, scenario, outcome: graded.outcome, events: snapshot.events,
+    const graded = grade(snapshot.events, scenario);
+    return { id: scenario.id, scenario, outcome: graded.outcome,
+      ...(graded.conditionOutcome ? { conditionOutcome: graded.conditionOutcome } : {}), events: snapshot.events,
       actions, observations: observations.records,
       timing: { preparationMs, reactionLatencyMs: graded.reactionLatencyMs, modelProcessingMs: null,
         measuredCaptureHz, browserTimeOriginMs, runnerClock: 'runner-performance', reactionClock: 'browser-performance',

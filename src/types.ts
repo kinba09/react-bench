@@ -1,8 +1,10 @@
 export type Level = 1 | 2 | 3 | 4 | 5;
 export type DynamicTrackingLevel = 1 | 2 | 3 | 4 | 5;
-export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking';
+export type Category = 'visual-reaction' | 'target-acquisition' | 'dynamic-tracking' | 'inhibitory-control';
 export type TargetSymbol = 'triangle' | 'circle' | 'square' | 'diamond' | 'star' | 'cross' | 'hexagon' | 'crescent' | 'heart' | 'flower';
 export type Outcome = 'success' | 'premature' | 'wrong' | 'expired';
+export type InhibitoryControlCondition = 'go' | 'no-go';
+export type InhibitoryControlOutcome = 'go-response' | 'go-omission' | 'go-wrong-click' | 'go-premature-click' | 'forbidden-click' | 'withheld';
 
 interface SharedConfig {
   seed: string;
@@ -25,7 +27,12 @@ export interface DynamicTrackingConfig extends SharedConfig {
   clickWindowMs: number;
   initialDelayMs?: [number, number];
 }
-export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig | DynamicTrackingConfig;
+export interface InhibitoryControlConfig extends SharedConfig {
+  category: 'inhibitory-control';
+  initialDelayMs: [number, number];
+  responseWindowsMs: [number, number, number, number, number];
+}
+export type BenchmarkConfig = VisualReactionConfig | TargetAcquisitionConfig | DynamicTrackingConfig | InhibitoryControlConfig;
 
 interface SharedScenario {
   id: string;
@@ -68,7 +75,13 @@ export interface DynamicTrackingScenario {
   requiredTargetId: string;
   objects: MovingObject[];
 }
-export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario;
+export interface InhibitoryControlScenario extends SharedScenario {
+  category: 'inhibitory-control';
+  initialDelayMs: number;
+  condition: InhibitoryControlCondition;
+  target: { u: number; v: number; radius: number };
+}
+export type Scenario = VisualReactionScenario | TargetAcquisitionScenario | DynamicTrackingScenario | InhibitoryControlScenario;
 export interface AcquisitionObjectState { id: string; x: number; y: number; radius: number; symbol: TargetSymbol; matching: boolean }
 
 export type TrialPhase = 'prepared' | 'waiting' | 'watching' | 'hidden' | 'active' | 'complete';
@@ -106,6 +119,7 @@ export interface SceneSnapshot {
   objects: (AcquisitionObjectState | MovingTargetState)[];
   requiredTargetId?: string;
   reference: { symbol: TargetSymbol } | null;
+  condition?: InhibitoryControlCondition;
   events: BrowserEvent[];
 }
 export interface ObservationRecord {
@@ -167,6 +181,7 @@ export interface TrialResult {
   id: string;
   scenario: Scenario;
   outcome: Outcome;
+  conditionOutcome?: InhibitoryControlOutcome;
   events: BrowserEvent[];
   observations: ObservationRecord[];
   actions: ActionRecord[];
@@ -189,6 +204,11 @@ export interface RunSummary {
   medianReactionLatencyMs: number | null;
   p95: { value: null; status: 'insufficient-samples' };
   failures: Record<Exclude<Outcome, 'success'>, number>;
+  inhibitoryControl?: {
+    byCondition: { condition: InhibitoryControlCondition; total: number; correct: number; medianReactionLatencyMs: number | null }[];
+    byLevel: { level: Level; byCondition: { condition: InhibitoryControlCondition; total: number; correct: number; medianReactionLatencyMs: number | null }[] }[];
+    outcomes: Record<InhibitoryControlOutcome, number>;
+  };
   byLevel: { level: Level; total: number; correct: number; medianReactionLatencyMs: number | null; objectsPerTrial: number | null }[];
 }
 export interface RunReport {
