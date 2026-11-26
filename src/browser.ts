@@ -135,6 +135,11 @@ function paintReference(symbol: TargetSymbol): void {
   drawSymbol(referenceContext, symbol, 20, 20, 27);
 }
 
+function acquisitionObjectsAt(scenario: Extract<Scenario, { category: 'target-acquisition' }>, rect: DOMRect): AcquisitionObjectState[] {
+  return scenario.objects.map(item => ({ id: item.id, x: rect.left + rect.width * item.u,
+    y: rect.top + rect.height * item.v, radius: scenario.objectSizePx / 2, symbol: item.symbol, matching: item.matching }));
+}
+
 function draw(nowMs = performance.now()): void {
   const rect = canvas.getBoundingClientRect();
   const pixelRatio = window.devicePixelRatio || 1;
@@ -207,9 +212,7 @@ function draw(nowMs = performance.now()): void {
     return;
   }
 
-  const radius = scenario.objectSizePx / 2;
-  objects = scenario.objects.map(item => ({ id: item.id, x: rect.left + rect.width * item.u,
-    y: rect.top + rect.height * item.v, radius, symbol: item.symbol, matching: item.matching }));
+  objects = acquisitionObjectsAt(scenario, rect);
   const matching = objects.find(item => item.matching)!;
   target = { x: matching.x, y: matching.y, radius: matching.radius };
   referenceValue = scenario.reference;
@@ -323,6 +326,18 @@ function frame(): void {
   }
 }
 
+function describeTask(category: Category, responseWindowMs: number): void {
+  const task = taskRegistry[category];
+  document.querySelector<HTMLElement>('#rules')!.textContent = task.instructions;
+  responseWindowLabel.textContent = category === 'target-acquisition' ? 'Time limit' : category === 'dynamic-tracking' ? 'Click window' : 'Response window';
+  document.querySelector<HTMLElement>('#window')!.textContent = `${responseWindowMs / 1000} s`;
+  categoryTitle.textContent = task.title;
+  categorySubtitle.textContent = category === 'target-acquisition'
+    ? 'Match the reference symbol. Choose once.' : category === 'dynamic-tracking' ? 'Track the star as it moves among distractors.'
+      : category === 'inhibitory-control' ? 'Click on green. Withhold on red.' : 'Wait for green. Make one precise click.';
+  document.title = `${task.title} · ReactBench`;
+}
+
 const environment: BrowserEnvironment = {
   prepare(next, index, total) {
     cancelAnimationFrame(animation);
@@ -337,18 +352,10 @@ const environment: BrowserEnvironment = {
     phaseCountdown.hidden = true;
     status.textContent = 'Ready';
     instruction.textContent = taskRegistry[scenario.category].instructions;
-    document.querySelector<HTMLElement>('#rules')!.textContent = taskRegistry[scenario.category].instructions;
     progress.textContent = `Trial ${index} of ${total}`;
     levelLabel.textContent = `Level ${scenario.level}`;
-    responseWindowLabel.textContent = scenario.category === 'target-acquisition' ? 'Time limit' : scenario.category === 'dynamic-tracking' ? 'Click window' : 'Response window';
-    document.querySelector<HTMLElement>('#window')!.textContent = `${(scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs) / 1000} s`;
     result.textContent = '—';
-    const task = taskRegistry[scenario.category];
-    categoryTitle.textContent = task.title;
-    categorySubtitle.textContent = scenario.category === 'target-acquisition'
-      ? 'Match the reference symbol. Choose once.' : scenario.category === 'dynamic-tracking' ? 'Track the star as it moves among distractors.'
-        : scenario.category === 'inhibitory-control' ? 'Click on green. Withhold on red.' : 'Wait for green. Make one precise click.';
-    document.title = `${task.title} · ReactBench`;
+    describeTask(scenario.category, scenario.category === 'dynamic-tracking' ? scenario.clickWindowMs : scenario.responseWindowMs);
     canvas.classList.toggle('acquisition', scenario.category === 'target-acquisition');
     canvas.setAttribute('aria-label', scenario.category === 'target-acquisition'
       ? 'Choose the symbol that matches the reference.' : scenario.category === 'dynamic-tracking' ? 'Click the moving star shown in the reference.'
@@ -447,12 +454,16 @@ document.addEventListener('click', event => {
     return;
   }
 
-  const objectIndex = scenario.category === 'target-acquisition'
-    ? objects.findIndex(item => Math.hypot(event.clientX - item.x, event.clientY - item.y) <= item.radius)
-    : -1;
-  const hit = scenario.category === 'target-acquisition'
-    ? objectIndex >= 0 && objects[objectIndex]!.matching
-    : Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
+  let objectIndex = -1;
+  let hit: boolean;
+  if (scenario.category === 'target-acquisition') {
+    // The participant can scroll between drawing the board and clicking it.
+    const registeredObjects = acquisitionObjectsAt(scenario, canvas.getBoundingClientRect());
+    objectIndex = registeredObjects.findIndex(item => Math.hypot(event.clientX - item.x, event.clientY - item.y) <= item.radius);
+    hit = objectIndex >= 0 && registeredObjects[objectIndex]!.matching;
+  } else {
+    hit = Math.hypot(event.clientX - target.x, event.clientY - target.y) <= target.radius;
+  }
   record('action-registered', now, { x: event.clientX, y: event.clientY, hit,
     ...(objectIndex >= 0 ? { objectIndex } : {}), inputTrusted: event.isTrusted });
   const { outcome, reactionLatencyMs } = grade(events, scenario);
@@ -493,6 +504,6 @@ document.querySelector<HTMLButtonElement>('#start')!.disabled = controlled || se
 document.querySelector<HTMLElement>('#startup-notice')!.hidden = true;
 if (sessionMode) {
   const { connectSession } = await import('./session-client.js');
-  await connectSession(environment, callback => { trialComplete = callback; });
+  await connectSession(environment, describeTask, callback => { trialComplete = callback; });
 }
 window.addEventListener('resize', () => draw());

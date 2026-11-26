@@ -6,7 +6,7 @@ A local benchmark for evaluating how accurately and quickly computer-use agents 
 
 ReactBench runs the benchmark game in a browser. An evaluated agent opens or attaches to that browser using its own browser/computer tools, reads the on-page instructions, and plays. The agent owns observation and input, including any screenshots it chooses to take. ReactBench records game events, input registration, deadlines, outcomes, and scores; it does not supply screenshots, continuously capture frames, or require a custom screenshot/action bridge in the intended evaluation flow.
 
-**Implementation status:** Scored Visual Reaction browser sessions work with agents' own tools. The default session contains three seeded level-1 trials, visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. Other games still use practice or the privileged offline oracle. Neither session nor oracle execution captures screenshots. Genuine Codex/Claude runs remain unvalidated.
+**Implementation status:** Visual Reaction and Target Acquisition support scored browser sessions with agents' own tools. Sessions offer visible readiness between trials, cancellation, and JSON/JSONL/HTML exports. Dynamic Tracking and Inhibitory Control currently run in practice or through the privileged offline oracle. Neither session nor oracle execution captures screenshots. Genuine Codex/Claude runs remain unvalidated.
 
 See the [implementation plan](docs/plan.md) for priorities and parallel work.
 
@@ -37,7 +37,10 @@ Open the local address from the command, rather than `web/index.html` directly. 
 npm run session -- --seed experiment-a --output results/session-a --agent my-agent --tool my-browser-tool
 npm run session -- --no-open --port 0
 npm run session -- --config configs/browser-session.json
+npm run session -- --config configs/target-acquisition.json
 ```
+
+The Target Acquisition example runs three seeded trials at each of five levels. The page shows the reference symbol during preparation, then reveals the board after the seeded wait. The agent has ten seconds to click the matching object. The first click ends the trial.
 
 `--no-open` prints the URL for an agent that opens its own browser; `--port 0` selects an available port. Opening the page does not claim the session: the first participant to press Start claims it. Use that same tab for the rest of the run. Reloading during an active trial cannot restart or recover it; cancel and create a new session. The server stays available for report downloads until Ctrl+C. **Cancel session** saves an incomplete report containing finished trials only.
 

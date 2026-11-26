@@ -250,7 +250,9 @@ export interface SessionView {
   state: 'ready' | 'active' | 'between-trials' | 'complete' | 'cancelled';
   index: number;
   total: number;
+  category: Category;
   level: Level;
+  responseWindowMs: number;
   scenario: Scenario | null;
   correct: number;
 }

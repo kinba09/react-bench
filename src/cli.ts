@@ -35,7 +35,6 @@ async function main(): Promise<void> {
   if (values.seed !== undefined) config.seed = values.seed;
   const outputDir = resolve(values.output ?? `results/${new Date().toISOString().replace(/[:.]/g, '-')}`);
   if (command === 'session') {
-    if (config.category !== 'visual-reaction') throw new Error('Browser sessions currently support Visual Reaction only.');
     const port = Number(values.port ?? 4173);
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('port must be an integer from 0 to 65535.');
     const session = await startBrowserSession({ config, outputDir, port,
